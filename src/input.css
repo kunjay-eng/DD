@@ -1,0 +1,64 @@
+@import "tailwindcss";
+@source "../index.html";
+
+/* ===== Cyber-Gold / Dark Neon theme ===== */
+@layer base {
+  html { background: #0a0a0a; }
+  body {
+    background: radial-gradient(120% 55% at 50% -8%, rgba(250,204,21,.10), transparent 60%) fixed, #0a0a0a;
+    font-family: system-ui, "Noto Sans Thai", sans-serif;
+    color: #f5f5f4;
+    padding-top: env(safe-area-inset-top);
+  }
+  button { cursor: pointer; }
+  input, select {
+    background: #18181b; border: 1px solid rgba(250,204,21,.25); border-radius: .6rem;
+    padding: .5rem .7rem; width: 100%; color: #fff;
+  }
+  input::placeholder { color: #71717a; }
+  :focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
+  input:focus-visible, select:focus-visible { outline-offset: 0; box-shadow: 0 0 12px rgba(250,204,21,.35); }
+}
+
+@layer components {
+  /* กล่องกระจกเงา: ไล่เฉดบนลงล่าง ขอบบนสว่างกว่าขอบล่าง */
+  .card {
+    background: linear-gradient(to bottom, rgba(39,39,42,.9), rgba(9,9,11,.95));
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(250,204,21,.3);
+    border-top-color: rgba(253,224,71,.5); border-bottom-color: rgba(234,179,8,.1);
+    box-shadow: 0 0 20px rgba(250,204,21,.12), inset 0 1px 0 rgba(253,224,71,.18);
+    border-radius: 1rem;
+  }
+  /* การ์ดยอดรวม: เรืองแสงเต็ม */
+  .card.hero {
+    border-color: rgba(250,204,21,.55); border-top-color: rgba(253,224,71,.7); border-bottom-color: rgba(234,179,8,.2);
+    box-shadow: 0 0 20px rgba(250,204,21,.35), inset 0 1px 0 rgba(253,224,71,.35);
+  }
+  .neon { filter: drop-shadow(0 0 8px rgba(250,204,21,.6)); }
+  .btn {
+    background: linear-gradient(to bottom, #fde047, #facc15 55%, #eab308); color: #000; font-weight: 700;
+    border-radius: .75rem; padding: .55rem 1rem; box-shadow: 0 0 20px rgba(250,204,21,.35), inset 0 1px 0 rgba(255,255,255,.45);
+  }
+  .btn:active { transform: translateY(1px); box-shadow: 0 0 12px rgba(250,204,21,.3); }
+  .btn:disabled { opacity: .4; box-shadow: none; }
+  .btn2 { border: 1px solid rgba(250,204,21,.4); color: #fde047; border-radius: .75rem; padding: .5rem .9rem; }
+  .btn2:active { background: rgba(250,204,21,.12); }
+  .ib { width: 3.4rem; height: 3.4rem; border-radius: 1rem; background: #18181b; border: 1px solid #27272a; font-size: 1.5rem; }
+  .ib.act { background: #3a2a0a; border-color: #facc15; box-shadow: 0 0 14px rgba(250,204,21,.4); }
+  .dot { width: 64px; height: 64px; border-radius: 50%; border: 2px solid rgba(250,204,21,.4); margin: 12px; touch-action: none; }
+  .dot.on { background: #facc15; box-shadow: 0 0 20px rgba(250,204,21,.7); }
+  .key { height: 56px; border-radius: 50%; border: 1px solid rgba(250,204,21,.3); font-size: 1.4rem; }
+  .key:active { background: #facc15; color: #000; box-shadow: 0 0 16px rgba(250,204,21,.6); }
+  .hide .amt { filter: blur(8px); }
+  .shake { animation: sh .3s; }
+  @keyframes sh { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+  .body { display: none; }
+  .open .body { display: block; }
+  .chev { transition: .2s; }
+  .open .chev { transform: rotate(180deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
