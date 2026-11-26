@@ -126,3 +126,36 @@ html, body { overscroll-behavior-y: none; }
 .nvc.text-yellow-300 .orb { box-shadow: 0 0 0 4px #0a0a0a, 0 0 0 5px rgba(253,224,71,.9), 0 5px 0 #854d0e, 0 9px 14px rgba(0,0,0,.75), 0 0 34px rgba(250,204,21,.85), inset 0 2px 3px rgba(255,255,255,.85), inset 0 -5px 8px rgba(133,77,14,.6); }
 .nvc.text-yellow-300 .ic { filter: none; }
 .rfbtn { padding: .3rem .7rem; font-size: .95rem; line-height: 1; }
+
+/* ===== v1.12.2 ===== */
+/* Header 2 แถว: แบรนด์+ปุ่ม / ชื่อหน้า+รีเฟรช */
+.hdr { padding: .65rem 1rem .55rem; border-bottom: 1px solid rgba(250,204,21,.18); }
+.hrow1, .hrow2 { display: flex; align-items: center; justify-content: space-between; }
+.hbrand { display: flex; align-items: center; gap: .65rem; min-width: 0; }
+.hlogo { width: 2.6rem; height: 2.6rem; border-radius: .7rem; flex: none; }
+.htitle { font-size: 1.3rem; font-weight: 700; white-space: nowrap; }
+.hbtns { display: flex; gap: .55rem; }
+.hbtns .ib { width: 2.75rem; height: 2.75rem; font-size: 1.2rem; border-radius: .85rem; }
+.hrow2 { margin-top: .55rem; }
+.rft { display: flex; align-items: center; gap: .55rem; color: #fef9c3; font-size: 1.05rem; font-weight: 700; }
+.rft::before { content: ""; width: .25rem; height: 1.15rem; border-radius: 99px; background: #facc15; box-shadow: 0 0 8px rgba(250,204,21,.7); }
+.hrow2 .rfbtn { width: 2.75rem; height: 2rem; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1rem; border-radius: 999px; }
+/* ปุ่มทางลัด */
+.qa { display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem; margin: .3rem 0 1.2rem; }
+.qa .card { padding: 1rem .25rem; text-align: center; }
+.qe { font-size: 1.6rem; line-height: 1.2; }
+.qt { margin-top: .55rem; font-size: .78rem; color: #fef08a; }
+/* หน้าธุรกรรม */
+.sp { margin-bottom: 1.1rem; }
+.chips { display: flex; gap: .55rem; overflow-x: auto; padding: .1rem .1rem .75rem; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { white-space: nowrap; border: 1px solid rgba(250,204,21,.3); color: #fef08a; border-radius: 999px; padding: .45rem 1rem; font-size: .8rem; flex: none; }
+.chip.on { background: #facc15; color: #000; border-color: #facc15; font-weight: 700; }
+.txi { padding: .95rem 1rem; margin-bottom: .85rem; }
+/* ตัวเลือกแบบปุ่ม (ประเภท / บัญชี) */
+.pk { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+.pkb { border: 1px solid rgba(250,204,21,.3); color: #fef08a; border-radius: .8rem; padding: .6rem .7rem; font-size: .8rem; text-align: left; line-height: 1.3; }
+.pkb.on { background: #facc15; color: #000; border-color: #facc15; font-weight: 700; box-shadow: 0 0 12px rgba(250,204,21,.35); }
+.pkc { text-align: center; }
+.pkw { grid-column: span 2; }
+.pks { font-size: .72rem; font-weight: 400; opacity: .8; }
