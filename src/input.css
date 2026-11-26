@@ -128,18 +128,24 @@ html, body { overscroll-behavior-y: none; }
 .rfbtn { padding: .3rem .7rem; font-size: .95rem; line-height: 1; }
 
 /* ===== v1.12.2 ===== */
-/* Header 2 แถว: แบรนด์+ปุ่ม / ชื่อหน้า+รีเฟรช */
-.hdr { padding: .65rem 1rem .55rem; border-bottom: 1px solid rgba(250,204,21,.18); }
-.hrow1, .hrow2 { display: flex; align-items: center; justify-content: space-between; }
-.hbrand { display: flex; align-items: center; gap: .65rem; min-width: 0; }
-.hlogo { width: 2.6rem; height: 2.6rem; border-radius: .7rem; flex: none; }
-.htitle { font-size: 1.3rem; font-weight: 700; white-space: nowrap; }
-.hbtns { display: flex; gap: .55rem; }
-.hbtns .ib { width: 2.75rem; height: 2.75rem; font-size: 1.2rem; border-radius: .85rem; }
-.hrow2 { margin-top: .55rem; }
-.rft { display: flex; align-items: center; gap: .55rem; color: #fef9c3; font-size: 1.05rem; font-weight: 700; }
-.rft::before { content: ""; width: .25rem; height: 1.15rem; border-radius: 99px; background: #facc15; box-shadow: 0 0 8px rgba(250,204,21,.7); }
-.hrow2 .rfbtn { width: 2.75rem; height: 2rem; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1rem; border-radius: 999px; }
+/* Header แถวเดียว: โลโก้ + ชื่อแอป · ชื่อหน้า | ปุ่ม 👁️ 🔓 🔄 */
+.hdr { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .5rem .9rem; border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(250,204,21,0), rgba(250,204,21,.45), rgba(250,204,21,0)) 1; }
+.hbrand { display: flex; align-items: center; gap: .55rem; min-width: 0; flex: 1; }
+.hlogo { width: 2.3rem; height: 2.3rem; border-radius: .6rem; flex: none; box-shadow: 0 0 10px rgba(250,204,21,.35); }
+.htxt { display: flex; align-items: baseline; gap: .45rem; min-width: 0; white-space: nowrap; }
+.htitle { font-size: 1rem; font-weight: 700; letter-spacing: .02em;
+  background: linear-gradient(180deg, #fff7c2 0%, #fde047 45%, #ca8a04 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 6px rgba(250,204,21,.35)); }
+.rft { display: inline-flex; align-items: center; gap: .45rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #d4d4d8; font-size: .82rem; font-weight: 500; }
+.rft::before { content: ""; width: 1px; height: .85rem; background: rgba(250,204,21,.55); flex: none; }
+.hbtns { display: flex; gap: .4rem; flex: none; }
+.hbtns .ib, .hbtns .rfbtn { width: 2.3rem; height: 2.3rem; padding: 0; font-size: 1rem; line-height: 1; border-radius: .7rem; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(to bottom, #1f1f23, #121214); border: 1px solid rgba(250,204,21,.25); color: inherit; }
+.hbtns .ib.act { background: #3a2a0a; border-color: #facc15; box-shadow: 0 0 12px rgba(250,204,21,.4); }
+.hbtns .rfbtn:active { background: rgba(250,204,21,.12); }
+.hbtns .rfbtn.spin { opacity: .6; }
+
 /* ปุ่มทางลัด */
 .qa { display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem; margin: .3rem 0 1.2rem; }
 .qa .card { padding: 1rem .25rem; text-align: center; }
