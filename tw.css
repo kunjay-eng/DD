@@ -915,3 +915,38 @@
     }
   }
 }
+
+/* ===== v1.10.0 ===== */
+/* ล็อกการดึงหน้าลงเพื่อรีเฟรช */
+html, body { overscroll-behavior-y: none; }
+/* เบลอ URL / Token (แตะช่องเพื่อดู/แก้ไข) */
+.blurf:not(:placeholder-shown) { filter: blur(6px); transition: filter .15s; }
+.blurf:focus { filter: none; }
+/* แถวปุ่มรีเฟรชทุกหน้า */
+.rfrow { display: flex; align-items: center; justify-content: space-between; margin: .15rem 0 .1rem; }
+.rft { color: #a1a1aa; font-size: .8rem; }
+.rfbtn { border: 1px solid rgba(250,204,21,.4); color: #fde047; border-radius: 999px; padding: .3rem .85rem; font-size: .8rem; }
+.rfbtn:active { background: rgba(250,204,21,.12); }
+.rfbtn.spin { opacity: .6; }
+/* ปุ่มอันตราย */
+.dng { border: 1px solid rgba(251,113,133,.6); color: #fb7185; border-radius: .75rem; padding: .55rem 1rem; font-weight: 700; background: rgba(251,113,133,.08); box-shadow: 0 0 14px rgba(251,113,133,.2); }
+.dng:active { background: rgba(251,113,133,.22); }
+/* toast ยืนยันการลบ */
+.ct { position: fixed; left: 1rem; right: 1rem; top: calc(env(safe-area-inset-top) + 1rem); z-index: 80; max-width: 28rem; margin: 0 auto; }
+.ct-in { padding: .9rem 1rem; }
+.ct-m { font-size: .9rem; line-height: 1.45; color: #f5f5f4; }
+.ct-b { display: flex; gap: .5rem; margin-top: .8rem; }
+.ct-b > * { flex: 1; }
+.ct-y { background: linear-gradient(to bottom, #fb7185, #e11d48); color: #fff; box-shadow: 0 0 16px rgba(251,113,133,.45), inset 0 1px 0 rgba(255,255,255,.3); }
+/* การ์ดเป้าเงินฝากสะสม: เงาแสงนีออน */
+.card.goal { border-color: rgba(253,224,71,.95); border-top-color: #fef08a; border-bottom-color: rgba(250,204,21,.55);
+  box-shadow: 0 0 4px rgba(253,224,71,.9), 0 0 18px rgba(250,204,21,.55), 0 0 42px rgba(250,204,21,.28), inset 0 0 22px rgba(250,204,21,.14), inset 0 1px 0 rgba(254,240,138,.5);
+  animation: goalpulse 3.2s ease-in-out infinite; }
+@keyframes goalpulse { 50% { box-shadow: 0 0 6px rgba(253,224,71,1), 0 0 26px rgba(250,204,21,.7), 0 0 58px rgba(250,204,21,.38), inset 0 0 26px rgba(250,204,21,.2), inset 0 1px 0 rgba(254,240,138,.6); } }
+.goal-t { color: #fde047; font-weight: 700; text-shadow: 0 0 8px rgba(250,204,21,.8); }
+.goal-v { color: #fff; }
+.goal-pc { font-size: 2.6rem; font-weight: 800; line-height: 1; margin-top: .5rem; color: #fde047; text-shadow: 0 0 6px rgba(253,224,71,.9), 0 0 18px rgba(250,204,21,.7), 0 0 36px rgba(250,204,21,.4); }
+.goal-pc small { font-size: 1.2rem; margin-left: .1rem; }
+.goal-track { height: .7rem; border-radius: 999px; margin-top: .6rem; background: #0a0a0a; border: 1px solid rgba(250,204,21,.35); box-shadow: inset 0 0 8px rgba(0,0,0,.9); }
+.goal-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #ca8a04, #facc15 60%, #fef08a); box-shadow: 0 0 8px #facc15, 0 0 20px rgba(250,204,21,.8); }
+@media (prefers-reduced-motion: reduce) { .card.goal { animation: none !important; } }
