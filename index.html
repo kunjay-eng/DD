@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Deposit Digital</title>
+<link rel="stylesheet" href="tw.css">
+</head>
+<body>
+<div id="lock" class="fixed inset-0 z-50 bg-neutral-950 flex flex-col items-center justify-center p-6 text-center">
+ <div class="text-yellow-300 text-2xl font-bold neon">Deposit Digital</div>
+ <div id="lt" class="mt-6 text-lg"></div><div id="lm" class="h-6 text-rose-400 text-sm"></div>
+ <div id="lpad" class="mt-4"></div>
+ <div class="mt-6 flex flex-col gap-3 text-sm text-yellow-200">
+  <button id="lsw" class="hidden"></button>
+  <label id="lrs" class="hidden underline cursor-pointer">กู้คืนจากไฟล์สำรอง<input id="rf" type="file" accept=".json" class="hidden"></label>
+  <button id="lcs" class="hidden underline">กู้คืนจาก Google Sheets</button><button id="lcd" class="hidden underline">กู้คืนจาก Google Drive</button>
+ </div>
+</div>
+
+<div id="app" class="hidden max-w-md mx-auto min-h-screen pb-28">
+ <header class="flex items-center justify-between px-4 py-4 sticky top-0 bg-neutral-950/90 backdrop-blur z-20"><div class="flex items-center gap-3"><img src="icon-192.png" alt="" class="w-11 h-11 rounded-xl"><span class="text-2xl font-bold">Deposit Digital</span></div><div class="flex gap-3"><button id="eye" class="ib" aria-label="ซ่อนหรือแสดงยอดเงิน">👁️</button><button id="lk" class="ib" aria-label="ล็อกแอป">🔓</button></div></header>
+ <main id="main" class="px-4"></main>
+ <nav class="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-zinc-950/95 border-t border-yellow-400/30 flex items-end justify-around px-2 pt-2" style="padding-bottom:calc(env(safe-area-inset-bottom) + .5rem)">
+  <button data-p="home" class="nv flex-1 text-xs">🏠<br>หน้าแรก</button>
+  <button data-p="acc" class="nv flex-1 text-xs">🏦<br>บัญชี</button>
+  <button data-p="tx" class="nv flex-1 -mt-8"><span class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-yellow-400 text-black text-3xl shadow-[0_0_20px_rgba(250,204,21,0.35)]">⇄</span><span class="text-xs">ธุรกรรม</span></button>
+  <button data-p="sum" class="nv flex-1 text-xs">📊<br>สรุปยอด</button>
+  <button data-p="set" class="nv flex-1 text-xs">⚙️<br>ตั้งค่า</button>
+ </nav>
+</div>
+<div id="toast" class="fixed top-4 inset-x-4 z-[60] hidden text-center"><span class="btn inline-block"></span></div>
+<div id="upd" class="hidden fixed inset-x-4 z-[70] max-w-md mx-auto" style="bottom:calc(env(safe-area-inset-bottom) + 6.5rem)"><div class="card hero p-3 flex items-center justify-between gap-3 text-sm"><span>✨ มีเวอร์ชันใหม่พร้อมใช้งาน</span><button id="updb" class="btn !py-1.5">อัปเดต</button></div></div>
+
+<script>
+const VER='1.9.0';
+const $=s=>document.querySelector(s), enc=new TextEncoder(), dec=new TextDecoder();
+const b64=u=>btoa(String.fromCharCode(...new Uint8Array(u))), ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const baht=n=>{const v=Number(n||0);return(v<0?'-':'')+'฿'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S,K,SALT,MODE,PAGE='home',FORM=null,TXF=null,IMP=null,TXD={},FT='all',FB='all',timer,syncT;
+const DEF=()=>({banks:[],accts:[],txs:[],goal:{amt:0,mi:0},tax:{limit:20000},hide:false,autoLock:60,bp:'',sheets:{url:'',token:'',auto:false},lastBackup:null,open:{}});
+
+async function dk(pw,salt,it=250000){const k=await crypto.subtle.importKey('raw',enc.encode(pw),'PBKDF2',false,['deriveKey']);
+ return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:it,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function seal(obj,key){if(obj==null)throw Error('no data');const iv=crypto.getRandomValues(new Uint8Array(12));
+ const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,enc.encode(JSON.stringify(obj)));return{iv:b64(iv),data:b64(ct)}}
+async function unseal(box,key){return JSON.parse(dec.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:ub(box.iv)},key,ub(box.data))))}
+async function save(ns){const v={mode:MODE,salt:b64(SALT),it:IT,...await seal(S,K)};localStorage.setItem('dd_vault',JSON.stringify(v));
+ clearTimeout(syncT);if(!ns&&S.sheets.auto&&S.bp&&S.sheets.url)syncT=setTimeout(()=>sendSheets(true),20000)}
+function toast(t){const e=$('#toast');e.firstChild.textContent=t;e.classList.remove('hidden');setTimeout(()=>e.classList.add('hidden'),2200)}
+
+/* ---------- Lock UI ---------- */
+function getSecret(mode,title,{canSwitch=false,restore=false}={}){return new Promise(res=>{
+ $('#lt').textContent=title;const pad=$('#lpad');pad.innerHTML='';$('#lm').textContent=canSwitch&&mode!=='pass'?'แนะนำ: รหัสผ่านข้อความ 8 ตัวอักษรขึ้นไป ปลอดภัยกว่า':'';
+ const sw=$('#lsw');sw.classList.toggle('hidden',!canSwitch);
+ if(canSwitch){sw.textContent='เปลี่ยนเป็น: '+LBL[NEXT[mode]];sw.onclick=()=>res({sw:1})}
+ ['#lrs','#lcs','#lcd'].forEach(q=>$(q).classList.toggle('hidden',!restore));
+ if(mode==='pass'){pad.onclick=null;pad.innerHTML='<input id="pp" type="password" autocomplete="off" class="text-center" placeholder="รหัสผ่านอย่างน้อย 8 ตัวอักษร"><button id="pb" class="btn w-full mt-3">ตกลง</button>';
+  const go=()=>{const v=$('#pp').value;if(v.length<8)lockMsg('ต้องมีอย่างน้อย 8 ตัวอักษร');else res({s:v})};$('#pb').onclick=go;$('#pp').onkeydown=e=>e.key==='Enter'&&go()
+ }else if(mode==='pin'){let v='';pad.innerHTML='<div id="pd" class="text-3xl tracking-[.5em] h-10 text-yellow-300"></div><div class="grid grid-cols-3 gap-3 w-64 mx-auto mt-3">'+
+  [1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(k=>k===''?'<span></span>':`<button class="key" data-k="${k}">${k}</button>`).join('')+'</div>';
+  pad.onclick=e=>{const k=e.target.dataset?.k;if(k==null)return;v=k==='⌫'?v.slice(0,-1):(v+k).slice(0,6);$('#pd').textContent='●'.repeat(v.length);if(v.length===6)setTimeout(()=>res({s:v}),80)}
+ }else{let seq=[],on=false;pad.onclick=null;
+  pad.innerHTML='<div id="pg" class="grid grid-cols-3 w-fit mx-auto" style="touch-action:none">'+[...Array(9).keys()].map(i=>`<div class="dot" data-i="${i}"></div>`).join('')+'</div><div class="text-xs text-zinc-400">ลากต่อจุดอย่างน้อย 4 จุด</div>';
+  const g=$('#pg'),hit=e=>{const el=document.elementFromPoint(e.clientX,e.clientY);const i=el?.dataset?.i;if(i!=null&&!seq.includes(i)){seq.push(i);el.classList.add('on')}};
+  g.onpointerdown=e=>{on=true;seq=[];g.querySelectorAll('.on').forEach(d=>d.classList.remove('on'));hit(e)};
+  g.onpointermove=e=>{if(on)hit(e)};
+  g.onpointerup=()=>{on=false;if(seq.length<4){lockMsg('ต้องต่ออย่างน้อย 4 จุด');seq=[];g.querySelectorAll('.on').forEach(d=>d.classList.remove('on'))}else res({s:seq.join('-')})}}
+})}
+function lockMsg(t){const m=$('#lm');m.textContent=t;$('#lpad').classList.remove('shake');void $('#lpad').offsetWidth;$('#lpad').classList.add('shake')}
+async function setupLock(preset){let mode='pattern';
+ for(;;){let r=await getSecret(mode,'ตั้งค่าการล็อกใหม่',{canSwitch:true,restore:!preset});
+  if(r.sw){mode=NEXT[mode];continue}
+  const r2=await getSecret(mode,'ยืนยันอีกครั้ง',{canSwitch:false});
+  if(r2.s!==r.s){lockMsg('ไม่ตรงกัน ลองใหม่');await new Promise(r=>setTimeout(r,600));continue}
+  MODE=mode;SALT=crypto.getRandomValues(new Uint8Array(16));IT=IT_NEW;K=await dk(r.s,SALT,IT);S=preset||DEF();await save();return}}
+let fails=0;
+async function unlock(v){MODE=v.mode;SALT=ub(v.salt);IT=v.it||250000;
+ for(;;){const r=await getSecret(MODE,{pin:'กรอก PIN 6 หลัก',pass:'กรอกรหัสผ่าน',pattern:'วาดรูปแบบเพื่อปลดล็อก'}[MODE]);
+  try{K=await dk(r.s,SALT,IT);S=Object.assign(DEF(),await unseal(v,K));$('#lm').textContent='';fails=0;
+   if(IT<IT_NEW){SALT=crypto.getRandomValues(new Uint8Array(16));IT=IT_NEW;K=await dk(r.s,SALT,IT);await save()}return}
+  catch(e){fails++;lockMsg('ไม่ถูกต้อง');if(fails>=3)await new Promise(z=>setTimeout(z,Math.min(30,(fails-2)*5)*1000))}}}
+async function boot(){navigator.storage?.persist?.();const raw=localStorage.getItem('dd_vault');
+ if(raw)await unlock(JSON.parse(raw));else await setupLock();
+ $('#lock').classList.add('hidden');$('#app').classList.remove('hidden');render();arm()}
+function lockNow(){if(!S)return;S=null;K=null;IMP=null;$('#app').classList.add('hidden');$('#lock').classList.remove('hidden');boot()}
+
+/* restore from file at lock screen */
+async function lockRestore(b){try{if(!b.bp){localStorage.setItem('dd_vault',JSON.stringify(b));location.reload();return}
+ const pw=prompt('ใส่รหัสผ่านสำรอง');const d=await unseal(b,await dk(pw,ub(b.salt),b.it||250000));
+ await setupLock(Object.assign(DEF(),d));$('#lock').classList.add('hidden');$('#app').classList.remove('hidden');render();arm()}catch(x){lockMsg('กู้คืนไม่สำเร็จ')}}
+$('#rf').onchange=async e=>{const f=e.target.files[0];if(f)lockRestore(JSON.parse(await f.text()))};
+$('#lcs').onclick=async()=>{const b=await cloud('sheet');b&&lockRestore(b)};$('#lcd').onclick=async()=>{const b=await cloud('drive');b&&lockRestore(b)};
+
+/* auto-lock */
+function arm(){clearTimeout(timer);if(S&&S.autoLock>0)timer=setTimeout(lockNow,S.autoLock*1000)}
+['pointerdown','keydown'].forEach(ev=>addEventListener(ev,()=>S&&arm()));
+document.addEventListener('visibilitychange',()=>{if(!S)return;$('#app').classList.toggle('hide',document.hidden||S.hide);if(document.hidden){if(S.sheets.auto&&S.bp&&S.sheets.url)sendSheets(true);if(S.autoLock>0)lockNow()}});
+
+/* ---------- Pages ---------- */
+function soon(t){return`<div class="card p-10 mt-6 text-center"><div class="text-4xl neon">🚧</div><div class="mt-3 text-xl text-yellow-300">${t}</div><div class="text-zinc-400 mt-1">Coming soon</div></div>`}
+function card(id,title,inner){const o=id==='closed'?S.open[id]===true:S.open[id]!==false;return`<section class="card mb-3 ${o?'open':''}" data-c="${id}"><button class="hd w-full flex justify-between items-center p-4 text-left text-yellow-300 font-bold"><span>${title}</span><span class="chev">▾</span></button><div class="body px-4 pb-4 text-sm space-y-3">${inner}</div></section>`}
+function settings(){
+ const banks=S.banks.map((b,i)=>`<div class="flex justify-between items-center bg-zinc-900 rounded-lg p-2"><div><div class="font-semibold">${esc(b.name)}</div><div class="text-xs text-zinc-400">${esc(b.product)}</div></div><button data-del="${i}" class="text-rose-400 px-2">ลบ</button></div>`).join('')||'<div class="text-zinc-500">ยังไม่มีรายการ</div>';
+ return card('bank','ตั้งค่าธนาคารและผลิตภัณฑ์',`${banks}<input id="bn" placeholder="ชื่อธนาคาร"><input id="bp" placeholder="ผลิตภัณฑ์ เช่น ออมทรัพย์, ฝากประจำ"><button id="addb" class="btn w-full">เพิ่มรายการ</button>`)
+ +card('tax','ตั้งค่าเงื่อนไขการเสียภาษี',`<div class="text-zinc-300">รวมทุกธนาคาร ดอกเบี้ยเกิน <b class="text-yellow-300 amt">${baht(S.tax.limit)}</b></div><label class="block">เกณฑ์ดอกเบี้ย (฿)<input id="tl" type="number" step="0.01" value="${S.tax.limit}"></label><label class="block">อัตราหัก ณ ที่จ่ายที่คาดไว้ (%)<input id="tr" type="number" step="0.01" min="0" value="${taxRate()}"></label><button id="stl" class="btn w-full">บันทึก</button>`)
+ +card('goal','เป้าเงินฝากสะสม',`<label class="block">เป้ายอดฝากรวม (฿)<input id="gt" type="number" step="0.01" min="0" value="${S.goal.amt||''}"></label><label class="block">ดอกเบี้ยต่อเดือนที่ใช้คำนวณ (฿) เว้นว่าง = ใช้ค่าเฉลี่ยจริง<input id="gm" type="number" step="0.01" min="0" value="${S.goal.mi||''}"></label><button id="sgl" class="btn w-full">บันทึกเป้า</button>`)
+ +card('priv','ความเป็นส่วนตัว',`<label class="flex justify-between items-center">ซ่อนยอดเงิน<input id="hd" type="checkbox" class="!w-5 !h-5" ${S.hide?'checked':''}></label>
+ <label class="block">ล็อกอัตโนมัติหลังไม่ใช้งาน<select id="al">${[[0,'ไม่ล็อก'],[30,'30 วินาที'],[60,'1 นาที'],[300,'5 นาที'],[900,'15 นาที']].map(([v,t])=>`<option value="${v}" ${S.autoLock==v?'selected':''}>${t}</option>`).join('')}</select></label>
+ <button id="chg" class="btn2 w-full">เปลี่ยน PIN / รูปแบบ</button>`)
+ +card('stat','สถานะการตั้งระบบ',`<div>เวอร์ชัน: <b>${VER}</b></div><div>เข้ารหัส: AES-256-GCM (PBKDF2)</div><div>วิธีล็อก: ${LBL[MODE]} · PBKDF2 ${IT/1000}k รอบ</div><div>ออนไลน์: ${navigator.onLine?'ใช่':'ไม่'}</div><div>Service Worker: ${'serviceWorker' in navigator&&navigator.serviceWorker.controller?'ทำงานอยู่':'ยังไม่ทำงาน'}</div><div>สำรองล่าสุด: ${S.lastBackup?new Date(S.lastBackup).toLocaleString('th-TH'):'ยังไม่เคย'}${!S.lastBackup||Date.now()-S.lastBackup>2592e6?' ⚠️ ควรสำรองใหม่':''}</div><button id="cu" class="btn2 w-full">🔄 ตรวจหาเวอร์ชันใหม่</button>`)
+ +card('bak','สำรอง / กู้คืน',`<button id="bk" class="btn w-full">💾 สำรองข้อมูล (บันทึกลงเครื่อง)</button>
+ <label class="btn2 block text-center cursor-pointer">กู้คืนจากไฟล์สำรอง<input id="rs" type="file" accept=".json" class="hidden"></label>
+ <div class="border-t border-yellow-400/20 pt-3 space-y-2"><div class="text-yellow-200">Google Sheets</div>
+ <input id="su" placeholder="URL ของสคริปต์" value="${esc(S.sheets.url)}"><input id="st" autocomplete="off" placeholder="Token (ยาวอย่างน้อย 24 ตัวอักษร)" value="${esc(S.sheets.token)}"><button id="mkt" class="btn2 w-full">🎲 สร้าง Token สุ่ม (256 บิต)</button><input id="sp" type="password" placeholder="รหัสผ่านสำรอง (แยกจาก PIN)" value="${esc(S.bp)}">
+ <label class="flex justify-between items-center">สำรองอัตโนมัติขึ้นชีต<input id="sa" type="checkbox" class="!w-5 !h-5" ${S.sheets.auto?'checked':''}></label>
+ <div class="flex gap-2"><button id="ss" class="btn2 flex-1">บันทึกค่า</button><button id="sn" class="btn flex-1">ส่งขึ้นชีต</button></div>
+ <button id="sd" class="btn w-full">☁️ บันทึกลง Google Drive</button><div class="flex gap-2"><button id="rcs" class="btn2 flex-1">กู้คืนจากชีต</button><button id="rcd" class="btn2 flex-1">กู้คืนจาก Drive</button></div>
+ <div class="text-xs text-zinc-400">จดรหัสผ่านสำรองไว้ ลืม = กู้คืนจากชีตไม่ได้</div></div>`)
+}
+
+function bindCards(){if($('#gs'))$('#gs').onclick=()=>{PAGE='set';render()};document.querySelectorAll('.hd').forEach(h=>h.onclick=()=>{const c=h.parentElement;c.classList.toggle('open');S.open[c.dataset.c]=c.classList.contains('open');save()})}
+const dd=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5),dsince=d=>Math.max(1,dd(d,today())),act=()=>S.accts.filter(a=>!a.closed),dsA=a=>Math.max(1,dd(a.since,a.closed||today()));
+const avgBal=a=>{const st=a.since,en=a.closed||today(),T=Math.max(1,dd(st,en));let cur=0,prev=st,area=0;
+ S.txs.filter(t=>t.acct===a.id||t.to===a.id).sort((x,y)=>x.date.localeCompare(y.date)).forEach(t=>{const d=t.date<st?st:t.date;area+=cur*Math.max(0,dd(prev,d));cur+=dl(t,a.id);if(d>prev)prev=d});
+ return(area+cur*Math.max(0,dd(prev,en)))/T};
+const rate=a=>{const v=avgBal(a);return v>0&&a.since?ia(a)*365/dsA(a)/v*100:null};
+const pct=r=>r==null?'-':r.toFixed(2)+'%';
+function accForm(){const e=FORM>=0?S.accts[FORM]:{};
+ if(!S.banks.length)return`<div class="card p-4 mb-3 text-sm">ต้องเพิ่มธนาคารและผลิตภัณฑ์ที่หน้าตั้งค่าก่อน<button id="fg" class="btn w-full mt-3">ไปที่ตั้งค่า</button><button id="fc" class="btn2 w-full mt-2">ยกเลิก</button></div>`;
+ const cur=S.banks.findIndex(b=>b.name===e.bank&&b.product===e.product);
+ return`<div class="card p-4 mb-3 space-y-2 text-sm"><div class="text-yellow-300 font-bold">${FORM>=0?'แก้ไขบัญชี':'เพิ่มบัญชี'}</div>
+ <label class="block">ธนาคาร / ผลิตภัณฑ์<select id="fb">${FORM>=0&&cur<0?`<option value="-1">${esc(e.bank+' · '+e.product)}</option>`:''}${S.banks.map((b,i)=>`<option value="${i}" ${i===cur?'selected':''}>${esc(b.name)} · ${esc(b.product)}</option>`).join('')}</select></label>
+ ${FORM<0?'<label class="block">ยอดยกมา (฿) ไม่บังคับ<input id="fa" type="number" step="0.01" min="0"></label>':''}
+ <label class="block">วันที่เริ่มนับดอกเบี้ย<input id="fd" type="date" value="${e.since||today()}"></label>
+ <label class="block">ประเภท<select id="ft">${Object.keys(TYL).map(k=>`<option value="${k}" ${(e.type||'sav')===k?'selected':''}>${TYL[k]}</option>`).join('')}</select></label>
+ <label class="block">อัตราดอกเบี้ยที่ธนาคารประกาศ (% ต่อปี)<input id="fv" type="number" step="0.01" min="0" value="${e.adv||''}"></label>
+ <label class="block">วันครบกำหนด (ฝากประจำ)<input id="fm" type="date" value="${e.mat||''}"></label>
+ <div class="flex gap-2"><button id="fs" class="btn flex-1">บันทึก</button><button id="fc" class="btn2 flex-1">ยกเลิก</button></div></div>`}
+function closedCard(){const C=S.accts.map((a,i)=>[a,i]).filter(([a])=>a.closed);if(!C.length)return'';
+ return card('closed',`บัญชีที่ปิดแล้ว<span class="block text-xs text-zinc-400 font-normal">${C.length} บัญชี · ไม่นับในยอดรวม แต่ดอกเบี้ยและภาษียังนับในสรุปรายปี</span>`,
+  C.map(([a,i])=>`<div class="bg-zinc-900 rounded-lg p-3 opacity-80"><div class="flex justify-between"><div><div class="font-semibold">${esc(a.bank)} · ${esc(a.product)}</div><div class="text-xs text-zinc-400">${TYL[a.type||'sav']} · ${a.since} → ${a.closed}</div></div><div class="text-yellow-300 font-bold">${pct(rate(a))}</div></div>
+  <div class="flex justify-between text-xs mt-1"><span class="amt">ยอดตอนปิด ${baht(bal(a))}</span><span class="amt text-emerald-400">ดอกเบี้ย ${baht(ia(a))}</span></div>
+  <div class="flex gap-4 mt-2 text-xs"><button data-ro="${i}" class="text-yellow-300">เปิดบัญชีอีกครั้ง</button><button data-dl="${i}" class="text-rose-400">ลบถาวร</button></div></div>`).join(''))}
+function accounts(){const A=S.accts,AA=act(),tot=AA.reduce((t,a)=>t+bal(a),0),ti=A.reduce((t,a)=>t+ia(a),0),
+ ann=AA.reduce((t,a)=>t+ia(a)*365/dsA(a),0),avg=(x=>x>0?ann/x*100:null)(AA.reduce((q,a)=>q+avgBal(a),0)),lim=S.tax.limit,pc=lim?Math.min(100,ti/lim*100):0;
+ let h=negBanner()+`<div class="card hero p-4 mt-2 mb-3"><div class="text-xs text-zinc-400">ยอดฝากรวม${A.length>AA.length?' (ไม่รวมบัญชีที่ปิด)':''}</div><div class="amt text-3xl font-bold text-yellow-300 neon">${baht(tot)}</div>
+ <div class="grid grid-cols-2 gap-3 mt-3 text-sm"><div><div class="text-xs text-zinc-400">ดอกเบี้ยที่ได้รับ</div><div class="amt text-emerald-400 font-semibold">${baht(ti)}</div></div>
+ <div><div class="text-xs text-zinc-400">ดอกเบี้ยเฉลี่ย (ประมาณ)</div><div class="text-yellow-300 font-semibold">${pct(avg)} ต่อปี</div></div></div>
+ <div class="mt-3 text-xs text-zinc-400">เทียบเกณฑ์ภาษี <span class="amt">${baht(lim)}</span></div><div class="h-2 rounded bg-zinc-800 mt-1 overflow-hidden"><div class="h-full ${ti>lim?'bg-rose-400':'bg-yellow-400'}" style="width:${pc}%"></div></div></div>`;
+ if(FORM!==null)return h+accForm();
+ h+='<button id="adda" class="btn w-full mb-3">+ เพิ่มบัญชี</button>';
+ if(!A.length)return h+'<div class="card p-6 text-center text-zinc-400">ยังไม่มีบัญชี กด “เพิ่มบัญชี” เพื่อเริ่มต้น</div>';
+ [...new Set(AA.map(a=>a.bank))].forEach(n=>{const L=A.map((a,i)=>[a,i]).filter(([a])=>!a.closed&&a.bank===n),sub=L.reduce((t,[a])=>t+bal(a),0);
+  h+=card('ac_'+n,`${esc(n)}<span class="amt block text-xs text-zinc-300 font-normal">${baht(sub)} · ${L.length} ผลิตภัณฑ์</span>`,
+  L.map(([a,i])=>`<div class="bg-zinc-900 rounded-lg p-3"><div class="flex justify-between"><div><div class="font-semibold">${esc(a.product)}</div><div class="text-xs text-zinc-400">${TYL[a.type||'sav']}</div></div><div class="text-right"><div class="text-yellow-300 font-bold">${pct(rate(a))}</div>${a.adv?`<div class="text-xs text-zinc-400">ประกาศ ${a.adv.toFixed(2)}%</div>`:''}</div></div>
+  <div class="flex justify-between text-xs mt-1"><span class="amt">ยอด ${baht(bal(a))}</span><span class="amt text-emerald-400">ดอกเบี้ย ${baht(ia(a))}</span></div>
+  <div class="text-xs text-zinc-500 mt-1">ตั้งแต่ ${a.since} (${dsince(a.since)} วัน)</div>${matLine(a)}
+  <div class="flex gap-4 mt-2 text-xs"><button data-ed="${i}" class="text-yellow-300">แก้ไข</button>${a.mat?`<button data-cal="${i}" class="text-zinc-300">📅 ปฏิทิน</button>`:''}<button data-cl="${i}" class="text-orange-300">ปิดบัญชี</button><button data-dl="${i}" class="text-rose-400">ลบ</button></div></div>`).join(''))});
+ h+=closedCard();return h+'<div class="text-xs text-zinc-500 mb-4">อัตราดอกเบี้ย = ดอกเบี้ยที่ได้รับ ÷ ยอดคงเหลือเฉลี่ยรายวัน ปรับเป็นต่อปีตามจำนวนวันที่นับ เป็นค่าประมาณ ไม่ใช่อัตราที่ธนาคารประกาศ</div>'}
+function bindAcc(){const g=q=>$(q);
+ if(g('#adda'))g('#adda').onclick=()=>{FORM=-1;render()};
+ if(g('#fc'))g('#fc').onclick=()=>{FORM=null;render()};
+ if(g('#fg'))g('#fg').onclick=()=>{FORM=null;PAGE='set';render()};
+ document.querySelectorAll('[data-cal]').forEach(b=>b.onclick=()=>icsDl(S.accts[+b.dataset.cal]));
+ document.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>{FORM=+b.dataset.ed;render()});
+ document.querySelectorAll('[data-cl]').forEach(b=>b.onclick=async()=>{const a=S.accts[+b.dataset.cl],v=bal(a);
+  const d=prompt('วันที่ปิดบัญชี (ปปปป-ดด-วว)'+(v!==0?'\nยอดคงเหลือ '+baht(v)+' จะถูกตัดออกจากยอดรวม (ควรบันทึกถอนหรือโอนออกก่อน)':'')+'\nประวัติธุรกรรมและดอกเบี้ยจะยังอยู่',today());
+  if(d===null)return;if(!/^\d{4}-\d\d-\d\d$/.test(d)||isNaN(new Date(d))||d<a.since)return toast('วันที่ไม่ถูกต้อง');
+  a.closed=d;await save();render();toast('ปิดบัญชีแล้ว')});
+ document.querySelectorAll('[data-ro]').forEach(b=>b.onclick=async()=>{delete S.accts[+b.dataset.ro].closed;await save();render();toast('เปิดบัญชีอีกครั้งแล้ว')});
+ document.querySelectorAll('[data-dl]').forEach(b=>b.onclick=async()=>{if(confirm('ลบบัญชีนี้และประวัติธุรกรรมทั้งหมดของบัญชี?')){{const id=S.accts[+b.dataset.dl].id;S.txs=S.txs.filter(t=>t.acct!==id&&t.to!==id);S.accts.splice(+b.dataset.dl,1)}await save();render()}});
+ if(g('#fs'))g('#fs').onclick=async()=>{const e=FORM>=0?S.accts[FORM]:{},i=+g('#fb').value,src=i>=0?S.banks[i]:e,d=g('#fd').value,ob=parseFloat(g('#fa')?.value)||0;
+  if(!d)return toast('เลือกวันที่');
+  const a={id:e.id||uid(),bank:src.bank||src.name,product:src.product,since:d,type:g('#ft').value,adv:parseFloat(g('#fv').value)||0,mat:g('#fm').value||'',...(e.closed?{closed:e.closed}:{})};
+  if(FORM>=0)S.accts[FORM]=a;else{S.accts.push(a);if(ob>0)S.txs.push({id:uid(),date:d,type:'open',acct:a.id,amt:ob,note:''})}
+  FORM=null;await save();render();toast('บันทึกแล้ว')}}
+
+const uid=()=>Math.random().toString(36).slice(2,9),ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'),today=()=>ymd(new Date());
+const TY={dep:['ฝาก','⬇️'],xfer:['โอนเข้าบัญชีในระบบ','🔁'],wdr:['ถอน','⬆️'],int:['ดอกเบี้ยเงินฝาก','✨'],wht:['ภาษีหัก ณ ที่จ่าย','🧾'],adj:['ปรับปรุงยอด','🛠️'],open:['ยอดยกมา','📒']};
+const dl=(t,id)=>t.type==='xfer'?(id===t.acct?-t.amt:id===t.to?t.amt:0):t.acct!==id?0:(t.type==='wdr'||t.type==='wht')?-t.amt:t.amt;
+const r2=v=>Math.round(v*100)/100,bal=a=>r2(S.txs.reduce((x,t)=>x+dl(t,a.id),0));
+const ia=a=>r2(S.txs.filter(t=>t.type==='int'&&t.acct===a.id).reduce((x,t)=>x+t.amt,0));
+const lab=id=>{const a=S.accts.find(x=>x.id===id);return a?esc(a.bank+' · '+a.product):'(บัญชีถูกลบ)'};
+function mig(){let c=false;if(!S.txs){S.txs=[];c=true}
+ S.accts.forEach(a=>{if(!a.id){a.id=uid();c=true}
+  if(a.balance!==undefined){const o=(a.balance||0)-(a.interest||0);
+   if(o>0)S.txs.push({id:uid(),date:a.since,type:'open',acct:a.id,amt:o,note:'ย้ายจากเวอร์ชันก่อน'});
+   if(a.interest>0)S.txs.push({id:uid(),date:a.since,type:'int',acct:a.id,amt:a.interest,note:'ย้ายจากเวอร์ชันก่อน'});
+   delete a.balance;delete a.interest;c=true}});return c}
+function txForm(){const e=TXD;
+ if(!S.accts.length)return`<div class="card p-4 mt-3 text-sm">ต้องเพิ่มบัญชีก่อนจึงจะบันทึกธุรกรรมได้<button id="xg" class="btn w-full mt-3">ไปที่บัญชี</button><button id="xc" class="btn2 w-full mt-2">ยกเลิก</button></div>`;
+ const opts=v=>S.accts.filter(a=>!a.closed||a.id===v).map(a=>`<option value="${a.id}" ${a.id===v?'selected':''}>${esc(a.bank)} · ${esc(a.product)}</option>`).join('');
+ return`<div class="card p-4 mt-3 space-y-3 text-sm"><div class="text-yellow-300 font-bold">${TXF>=0?'แก้ไขธุรกรรม':'เพิ่มธุรกรรม'}</div>
+ <div class="grid grid-cols-2 gap-2">${Object.keys(TY).map(k=>`<button data-tp="${k}" class="rounded-lg border px-2 py-2 text-xs ${e.type===k?'bg-yellow-400 text-black font-bold border-yellow-400':'border-yellow-400/30 text-yellow-200'}">${TY[k][1]} ${TY[k][0]}</button>`).join('')}</div>
+ <label class="block">${e.type==='xfer'?'จากบัญชี':'บัญชี'}<select id="xa">${opts(e.acct)}</select></label>
+ ${e.type==='xfer'?`<label class="block">ไปยังบัญชี<select id="xt">${opts(e.to)}</select></label>`:''}
+ <label class="block">จำนวนเงิน (฿)${e.type==='adj'?' ใส่ค่าลบเพื่อลดยอด':''}<input id="xm" type="number" step="0.01" ${e.type==='adj'?'':'min="0"'} value="${e.amt??''}"></label>
+ <label class="block">วันที่<input id="xd" type="date" value="${e.date}"></label>
+ <label class="block">บันทึกช่วยจำ<input id="xn" value="${esc(e.note||'')}"></label>
+ <div class="flex gap-2"><button id="xs" class="btn flex-1">บันทึก</button><button id="xc" class="btn2 flex-1">ยกเลิก</button></div></div>`}
+
+/* ---------- CSV import ---------- */
+const norm=s=>String(s==null?'':s).toLowerCase().replace(/\s+/g,'');
+const CSVH={date:['วันที่','date'],bank:['ธนาคาร','bank'],product:['ผลิตภัณฑ์','product','บัญชี','account'],type:['ประเภท','type'],amt:['จำนวนเงิน','จำนวน','amount','amt'],note:['บันทึก','บันทึกช่วยจำ','หมายเหตุ','note','memo']};
+const CSVT={'ยอดยกมา':'open','open':'open','ฝาก':'dep','dep':'dep','deposit':'dep','ถอน':'wdr','wdr':'wdr','withdraw':'wdr','ดอกเบี้ยเงินฝาก':'int','ดอกเบี้ย':'int','int':'int','interest':'int',
+ 'ภาษีหักณที่จ่าย':'wht','ภาษีหัก':'wht','ภาษี':'wht','wht':'wht','tax':'wht','ปรับปรุงยอด':'adj','ปรับยอด':'adj','adj':'adj','adjust':'adj'},CSVX=new Set(['โอน','โอนเข้าบัญชีในระบบ','xfer','transfer']);
+function parseCSV(t){t=t.replace(/^\uFEFF/,'');const f=t.split(/\r?\n/,1)[0],d=f.includes('\t')?'\t':(f.split(';').length>f.split(',').length?';':',');
+ const rows=[];let r=[],c='',q=false;
+ for(let i=0;i<t.length;i++){const ch=t[i];
+  if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}
+  else if(ch==='"')q=true;
+  else if(ch===d){r.push(c);c=''}
+  else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);c='';rows.push(r);r=[]}
+  else c+=ch}
+ if(c!==''||r.length){r.push(c);rows.push(r)}
+ return rows}
+function pDate(s){s=String(s).trim().split(/[ T]/)[0];let y,m,d,x;
+ if(x=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/)){y=+x[1];m=+x[2];d=+x[3]}
+ else if(x=s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/)){d=+x[1];m=+x[2];y=+x[3]}
+ else return null;
+ if(y>2400)y-=543;
+ const dt=new Date(y,m-1,d);if(y<1990||y>2100||dt.getFullYear()!==y||dt.getMonth()!==m-1||dt.getDate()!==d)return null;
+ return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')}
+function pAmt(s){s=String(s).replace(/[฿,\s]/g,'').replace(/^\((.*)\)$/,'-$1');return/^-?\d+(\.\d+)?$/.test(s)?r2(parseFloat(s)):null}
+async function csvLoad(f){if(f.size>2e6)return toast('ไฟล์ใหญ่เกิน 2 MB');
+ const t=await f.text();if(t.includes('\uFFFD'))return toast('ไฟล์ไม่ใช่ UTF-8 ให้บันทึกเป็น “CSV UTF-8” แล้วลองใหม่');
+ const R=parseCSV(t).filter(r=>r.some(c=>String(c).trim()!==''));
+ if(R.length<2)return toast('ไม่พบข้อมูลในไฟล์');
+ const H=R[0].map(norm),col={};for(const k in CSVH)col[k]=H.findIndex(h=>CSVH[k].map(norm).includes(h));
+ const miss=['date','bank','product','type','amt'].filter(k=>col[k]<0);if(miss.length)return toast('ไม่พบคอลัมน์: '+miss.map(k=>CSVH[k][0]).join(', '));
+ if(R.length>5001)return toast('เกิน 5,000 แถว แบ่งไฟล์แล้วนำเข้าทีละส่วน');
+ IMP={create:true,skipDup:true,rows:R.slice(1).map((r,i)=>{const g=k=>col[k]>=0?String(r[col[k]]??'').trim():'',tk=norm(g('type')),
+  o={n:i+2,bank:g('bank'),product:g('product'),note:g('note'),date:pDate(g('date')),amt:pAmt(g('amt')),type:CSVT[tk]||null};
+  if(!o.date)o.err='วันที่ไม่ถูกต้อง “'+g('date')+'”';else if(CSVX.has(tk))o.err='ไม่รองรับ “โอน” ให้ใช้ ถอน + ฝาก แทน';else if(!o.type)o.err='ประเภทไม่รู้จัก “'+g('type')+'”';
+  else if(o.amt==null)o.err='จำนวนเงินไม่ถูกต้อง “'+g('amt')+'”';else if(o.type==='adj'?o.amt===0:o.amt<=0)o.err=o.type==='adj'?'จำนวนต้องไม่เป็น 0':'จำนวนต้องมากกว่า 0';
+  else if(!o.bank||!o.product)o.err='ขาดธนาคารหรือผลิตภัณฑ์';
+  return o})};
+ TXF=null;PAGE='tx';render()}
+function impPlan(){const key=(d,a,t,m)=>d+'|'+a+'|'+t+'|'+m,ex={},nk=(b,p)=>norm(b)+'|'+norm(p),A={},newA={},tx=[],errs=[];let dup=0;
+ S.txs.forEach(t=>{const k=key(t.date,t.acct,t.type,t.amt);ex[k]=(ex[k]||0)+1});S.accts.forEach(a=>A[nk(a.bank,a.product)]=a.id);
+ IMP.rows.forEach(r=>{if(r.err){errs.push({n:r.n,m:r.err});return}
+  const k=nk(r.bank,r.product);let id=A[k];
+  if(!id){if(!IMP.create){errs.push({n:r.n,m:'ไม่พบบัญชี '+r.bank+' · '+r.product});return}
+   newA[k]={id:uid(),bank:r.bank,product:r.product,since:r.date,type:'sav',adv:0,mat:''};id=A[k]=newA[k].id}
+  else if(newA[k]&&r.date<newA[k].since)newA[k].since=r.date;
+  const dk=key(r.date,id,r.type,r.amt);if(IMP.skipDup&&ex[dk]>0){ex[dk]--;dup++;return}
+  tx.push({id:uid(),date:r.date,type:r.type,acct:id,amt:r.amt,note:r.note})});
+ const na=Object.values(newA),nm={},cur=negs(S.txs);S.accts.concat(na).forEach(a=>nm[a.id]=a.bank+' · '+a.product);
+ return{tx,errs,dup,newA:na,neg:negs([...S.txs,...tx]).filter(x=>!cur.some(y=>y.id===x.id)).map(x=>nm[x.id]+' ตั้งแต่ '+x.date)}}
+function impView(){const P=impPlan(),by={};P.tx.forEach(t=>by[t.type]=(by[t.type]||0)+1);
+ const bx=(n,l,c)=>`<div class="bg-zinc-900 rounded-lg p-2"><div class="text-xl font-bold ${c}">${n}</div><div class="text-xs text-zinc-400">${l}</div></div>`;
+ return`<div class="card hero p-4 mt-2 mb-3 space-y-3 text-sm"><div class="text-yellow-300 font-bold">ตรวจก่อนนำเข้า CSV</div>
+ <div class="grid grid-cols-3 gap-2 text-center">${bx(P.tx.length,'นำเข้าได้','text-emerald-400')}${bx(P.dup,'ซ้ำ (ข้าม)','text-yellow-300')}${bx(P.errs.length,'ผิดพลาด','text-rose-400')}</div>
+ ${Object.keys(by).length?'<div class="text-xs text-zinc-300">'+Object.keys(by).map(k=>TY[k][0]+' '+by[k]).join(' · ')+'</div>':''}
+ ${P.newA.length?'<div class="text-xs text-yellow-200">จะสร้างบัญชีใหม่ '+P.newA.length+' บัญชี: '+esc(P.newA.map(a=>a.bank+' · '+a.product).join(', '))+' (ประเภทออมทรัพย์ แก้ได้ที่หน้าบัญชี)</div>':''}
+ ${P.neg.length?'<div class="text-xs text-orange-300">⚠️ ยอดจะติดลบ: '+esc(P.neg.join(', '))+' (ตรวจว่าใส่ยอดยกมาแล้วหรือยัง)</div>':''}
+ <label class="flex justify-between items-center gap-3"><span>สร้างบัญชีที่ยังไม่มีให้อัตโนมัติ</span><input id="imca" type="checkbox" class="!w-5 !h-5" ${IMP.create?'checked':''}></label>
+ <label class="flex justify-between items-center gap-3"><span>ข้ามรายการที่ซ้ำกับที่มีอยู่แล้ว</span><input id="imsd" type="checkbox" class="!w-5 !h-5" ${IMP.skipDup?'checked':''}></label>
+ ${P.errs.length?'<div class="text-xs text-rose-400 space-y-1"><div class="font-semibold">แถวที่ผิดพลาด (จะไม่ถูกนำเข้า)</div>'+P.errs.slice(0,15).map(e=>'<div>แถว '+e.n+': '+esc(e.m)+'</div>').join('')+(P.errs.length>15?'<div>… และอีก '+(P.errs.length-15)+' แถว</div>':'')+'</div>':''}
+ <div class="flex gap-2"><button id="imgo" class="btn flex-1" ${P.tx.length?'':'disabled'}>นำเข้า ${P.tx.length} รายการ</button><button id="imx" class="btn2 flex-1">ยกเลิก</button></div></div>`}
+function csvTemplate(){const t='\uFEFFวันที่,ธนาคาร,ผลิตภัณฑ์,ประเภท,จำนวนเงิน,บันทึก\r\n'+['2025-01-01,KBank,ออมทรัพย์,ยอดยกมา,50000,','2025-03-15,KBank,ออมทรัพย์,ฝาก,10000,เงินเดือน','2025-06-30,KBank,ออมทรัพย์,ดอกเบี้ยเงินฝาก,112.50,','2025-06-30,KBank,ออมทรัพย์,ภาษีหัก ณ ที่จ่าย,16.88,','2025-02-01,SCB,ฝากประจำ,ยอดยกมา,30000,','2025-08-10,KBank,ออมทรัพย์,ถอน,5000,ค่าซ่อมรถ'].join('\r\n')+'\r\n';
+ const l=document.createElement('a');l.href=URL.createObjectURL(new Blob([t],{type:'text/csv;charset=utf-8'}));l.download='DepositDigital_import_template.csv';l.click();toast('ดาวน์โหลดไฟล์ตัวอย่างแล้ว (ลบแถวตัวอย่างก่อนใช้จริง)')}
+function txPage(){if(IMP)return impView();if(TXF!==null)return txForm();
+ const bk=a=>S.accts.find(x=>x.id===a)?.bank;
+ const L=S.txs.map((t,i)=>[t,i]).filter(([t])=>(FT==='all'||t.type===FT)&&(FB==='all'||bk(t.acct)===FB||bk(t.to)===FB)).sort((a,b)=>b[0].date.localeCompare(a[0].date)||b[1]-a[1]);
+ const sm=ty=>L.filter(([t])=>t.type===ty).reduce((x,[t])=>x+t.amt,0),i=sm('int'),w=sm('wht');
+ let h=`<div class="card hero p-4 mt-2 mb-3"><div class="text-xs text-zinc-400">ดอกเบี้ยเงินฝาก (ตามตัวกรอง)</div><div class="amt text-2xl font-bold text-yellow-300 neon">${baht(i)}</div>
+ <div class="grid grid-cols-2 gap-3 mt-3 text-sm"><div><div class="text-xs text-zinc-400">ภาษีหัก ณ ที่จ่าย</div><div class="text-rose-400 font-semibold"><span class="amt">${baht(w)}</span> <span class="text-xs text-zinc-400">(${pw(w,i)})</span></div></div><div><div class="text-xs text-zinc-400">ดอกเบี้ยสุทธิ</div><div class="amt text-emerald-400 font-semibold">${baht(i-w)}</div></div></div></div>
+ <button id="addx" class="btn w-full mb-2">+ เพิ่มธุรกรรม</button>
+ <div class="flex gap-2 mb-3"><label class="btn2 flex-1 text-center cursor-pointer">📥 นำเข้า CSV<input id="imf" type="file" accept=".csv,.txt,text/csv" class="hidden"></label><button id="imt" class="btn2 flex-1">📄 ไฟล์ตัวอย่าง</button></div>
+ <div class="flex gap-2 overflow-x-auto pb-2">${['all',...Object.keys(TY)].map(k=>`<button data-ft="${k}" class="whitespace-nowrap rounded-full px-3 py-1 text-xs border ${FT===k?'bg-yellow-400 text-black border-yellow-400':'border-yellow-400/30 text-yellow-200'}">${k==='all'?'ทั้งหมด':TY[k][0]}</button>`).join('')}</div>
+ <select id="fbk" class="mb-3"><option value="all">ทุกธนาคาร</option>${[...new Set(S.accts.map(a=>a.bank))].map(b=>`<option ${b===FB?'selected':''}>${esc(b)}</option>`).join('')}</select>`;
+ if(!L.length)return h+'<div class="card p-6 text-center text-zinc-400">ยังไม่มีธุรกรรม</div>';
+ return h+L.map(([t,i])=>{const neg=t.type==='wdr'||t.type==='wht'||(t.type==='adj'&&t.amt<0),x=t.type==='xfer';
+  return`<div class="card p-3 mb-2"><div class="flex justify-between gap-2"><div><div class="font-semibold">${TY[t.type][1]} ${TY[t.type][0]}</div><div class="text-xs text-zinc-400">${x?lab(t.acct)+' → '+lab(t.to):lab(t.acct)}</div></div>
+  <div class="amt font-bold whitespace-nowrap ${x?'text-yellow-300':neg?'text-rose-400':'text-emerald-400'}">${x?'':neg?'−':'+'}${baht(Math.abs(t.amt))}</div></div>
+  <div class="flex justify-between text-xs text-zinc-500 mt-1"><span>${t.date}${t.note?' · '+esc(t.note):''}</span><span><button data-xe="${i}" class="text-yellow-300">แก้ไข</button><button data-xd="${i}" class="text-rose-400 ml-3">ลบ</button></span></div></div>`}).join('')}
+function capTx(){if($('#xa')){TXD.acct=$('#xa').value;if($('#xt'))TXD.to=$('#xt').value;TXD.amt=$('#xm').value;TXD.date=$('#xd').value;TXD.note=$('#xn').value}}
+function bindTx(){const g=q=>$(q);
+ if(g('#imt'))g('#imt').onclick=csvTemplate;
+ if(g('#imf'))g('#imf').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)await csvLoad(f)};
+ if(g('#imx'))g('#imx').onclick=()=>{IMP=null;render()};
+ if(g('#imca'))g('#imca').onchange=e=>{IMP.create=e.target.checked;render()};
+ if(g('#imsd'))g('#imsd').onchange=e=>{IMP.skipDup=e.target.checked;render()};
+ if(g('#imgo'))g('#imgo').onclick=async()=>{const P=impPlan();if(!P.tx.length)return;
+  if(P.neg.length&&!confirm('ยอดจะติดลบ: '+P.neg.join(', ')+'\nนำเข้าต่อ?'))return;
+  P.newA.forEach(a=>{S.accts.push(a);if(!S.banks.some(b=>norm(b.name)===norm(a.bank)&&norm(b.product)===norm(a.product)))S.banks.push({name:a.bank,product:a.product})});
+  S.txs.push(...P.tx);IMP=null;await save();render();toast('นำเข้า '+P.tx.length+' รายการแล้ว')};
+ if(g('#addx'))g('#addx').onclick=()=>{const L=act();if(!L.length)return toast('ไม่มีบัญชีที่เปิดอยู่');TXD={type:'dep',acct:L[0].id,to:(L[1]||L[0]).id,amt:'',date:today(),note:''};TXF=-1;render()};
+ document.querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{FT=b.dataset.ft;render()});
+ if(g('#fbk'))g('#fbk').onchange=e=>{FB=e.target.value;render()};
+ document.querySelectorAll('[data-xe]').forEach(b=>b.onclick=()=>{TXF=+b.dataset.xe;TXD={...S.txs[TXF]};render()});
+ document.querySelectorAll('[data-xd]').forEach(b=>b.onclick=async()=>{const k=+b.dataset.xd,bad=newNeg(S.txs.filter((_,j)=>j!==k));if(confirm(bad.length?'การลบจะทำให้ยอดติดลบ: '+badMsg(bad)+'\nลบต่อ?':'ลบธุรกรรมนี้?')){S.txs.splice(k,1);await save();render()}});
+ document.querySelectorAll('[data-tp]').forEach(b=>b.onclick=()=>{capTx();TXD.type=b.dataset.tp;render()});
+ if(g('#xc'))g('#xc').onclick=()=>{TXF=null;render()};
+ if(g('#xg'))g('#xg').onclick=()=>{TXF=null;PAGE='acc';render()};
+ if(g('#xs'))g('#xs').onclick=async()=>{capTx();const e=TXD,n=Math.round(parseFloat(e.amt)*100)/100;
+  if(!n||(e.type!=='adj'&&n<=0)||!e.date)return toast('กรอกจำนวนเงินและวันที่');
+  if(e.type==='xfer'&&e.acct===e.to)return toast('เลือกบัญชีต้นทางและปลายทางให้ต่างกัน');
+  const t={id:e.id||uid(),date:e.date,type:e.type,acct:e.acct,amt:n,note:(e.note||'').trim()};if(e.type==='xfer')t.to=e.to;
+  const L=TXF>=0?S.txs.map((x,k)=>k===TXF?t:x):[...S.txs,t],bad=newNeg(L);if(bad.length&&!confirm('ยอดบัญชีจะติดลบ: '+badMsg(bad)+'\nดำเนินการต่อ?'))return;
+  if(TXF>=0)S.txs[TXF]=t;else S.txs.push(t);TXF=null;await save();render();toast('บันทึกแล้ว')}}
+
+let SY=String(new Date().getFullYear());
+const CY=()=>String(new Date().getFullYear()),MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const sumT=(ty,y)=>r2(S.txs.filter(t=>t.type===ty&&(!y||t.date.slice(0,4)===y)).reduce((x,t)=>x+t.amt,0));
+const taxBar=(i,lim)=>{const pc=lim?i/lim*100:0,c=pc>=100?'bg-rose-400':pc>=80?'bg-orange-400':'bg-yellow-400';
+ return`<div class="h-2 rounded bg-zinc-800 mt-2 overflow-hidden"><div class="h-full ${c}" style="width:${Math.min(100,pc)}%"></div></div><div class="text-xs mt-1 ${pc>=100?'text-rose-400':'text-zinc-400'}">${lim?(i>=lim?'เกินเกณฑ์ที่ตั้งไว้ <span class="amt">'+baht(i-lim)+'</span>':'เหลืออีก <span class="amt">'+baht(lim-i)+'</span> ก่อนถึงเกณฑ์')+' ('+pc.toFixed(1)+'%)':'ยังไม่ได้ตั้งเกณฑ์'}</div>`};
+function openTx(ty){const L=act();if(!L.length)return toast('ไม่มีบัญชีที่เปิดอยู่');TXD={type:ty,acct:L[0].id,to:(L[1]||L[0]).id,amt:'',date:today(),note:''};TXF=-1;PAGE='tx';render()}
+function home(){const A=act(),tot=A.reduce((x,a)=>x+bal(a),0),y=CY(),i=sumT('int',y),w=sumT('wht',y),nb=new Set(A.map(a=>a.bank)).size;
+ let h=`<div class="card hero p-5 mt-2 mb-3"><div class="text-xs text-zinc-400">ยอดฝากรวมทุกธนาคาร</div><div class="amt text-4xl font-bold text-yellow-300 neon mt-1">${baht(tot)}</div><div class="text-xs text-zinc-400 mt-2">${A.length} บัญชี · ${nb} ธนาคาร</div></div>`;
+ if(!A.length)return h+`<div class="card p-6 text-center"><div class="text-zinc-300">เริ่มต้นด้วยการเพิ่มบัญชีแรกของคุณ</div><button id="hg" class="btn w-full mt-4">ไปที่บัญชี</button></div>`;
+ h+=negBanner()+`<div class="grid grid-cols-4 gap-2 mb-3">${[['dep','⬇️','ฝาก'],['wdr','⬆️','ถอน'],['int','✨','ดอกเบี้ย'],['xfer','🔁','โอน']].map(([k,e,t])=>`<button data-q="${k}" class="card py-3 text-center"><div class="text-2xl">${e}</div><div class="text-xs mt-1 text-yellow-200">${t}</div></button>`).join('')}</div>
+ <div class="card p-4 mb-3"><div class="flex justify-between text-sm"><span class="text-yellow-300 font-bold">ดอกเบี้ยปี ${y}</span><span class="amt font-semibold">${baht(i)}</span></div>${taxBar(i,S.tax.limit)}<div class="text-xs text-zinc-500 mt-2">หัก ณ ที่จ่ายแล้ว <span class="amt">${baht(w)}</span> (${pw(w,i)} ของดอกเบี้ย)</div></div>`;
+ h+=matCard()+goalCard();
+ const top=A.map(a=>[a,rate(a)]).filter(x=>x[1]!=null).sort((a,b)=>b[1]-a[1]).slice(0,3);
+ if(top.length)h+=`<div class="card p-4 mb-3"><div class="text-yellow-300 font-bold text-sm mb-2">ดอกเบี้ยสูงสุด (ประมาณ)</div>${top.map(([a,r])=>`<div class="flex justify-between py-1 text-sm"><span>${esc(a.bank)} · ${esc(a.product)}</span><b class="text-yellow-300">${pct(r)}</b></div>`).join('')}</div>`;
+ const rc=[...S.txs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+ h+=`<div class="card p-4 mb-3"><div class="flex justify-between mb-2"><span class="text-yellow-300 font-bold text-sm">ธุรกรรมล่าสุด</span><button id="ha" class="text-xs text-yellow-200">ดูทั้งหมด</button></div>${rc.length?rc.map(t=>{const neg=t.type==='wdr'||t.type==='wht'||(t.type==='adj'&&t.amt<0),x=t.type==='xfer';
+  return`<div class="flex justify-between items-center py-2 border-t border-zinc-800 text-sm"><div><div>${TY[t.type][1]} ${TY[t.type][0]}</div><div class="text-xs text-zinc-500">${t.date} · ${x?lab(t.acct)+' → '+lab(t.to):lab(t.acct)}</div></div><div class="amt font-semibold ${x?'text-yellow-300':neg?'text-rose-400':'text-emerald-400'}">${x?'':neg?'−':'+'}${baht(Math.abs(t.amt))}</div></div>`}).join(''):'<div class="text-zinc-500 text-sm">ยังไม่มีธุรกรรม</div>'}</div>`;
+ return h}
+function bindHome(){const g=q=>$(q);
+ document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>openTx(b.dataset.q));
+ if(g('#hg'))g('#hg').onclick=()=>{PAGE='acc';render()};
+ if(g('#ha'))g('#ha').onclick=()=>{PAGE='tx';TXF=null;render()}}
+function summary(){const A=S.accts,tot=act().reduce((x,a)=>x+bal(a),0),i=sumT('int',SY),w=sumT('wht',SY),lim=S.tax.limit;
+ const ys=[...new Set([CY(),...S.txs.map(t=>t.date.slice(0,4))])].sort().reverse();
+ const m=Array(12).fill(0);S.txs.forEach(t=>{if(t.type==='int'&&t.date.slice(0,4)===SY)m[+t.date.slice(5,7)-1]+=t.amt});const mx=Math.max(...m,1);
+ const cell=(l,v,c)=>`<div class="card p-3"><div class="text-xs text-zinc-400">${l}</div><div class="amt font-semibold ${c}">${v}</div></div>`;
+ let h=`<div class="flex items-center justify-between mt-2 mb-3"><div class="text-yellow-300 font-bold text-lg">สรุปยอดปี</div><select id="sy" style="width:auto">${ys.map(y=>`<option ${y===SY?'selected':''}>${y}</option>`).join('')}</select></div>
+ <div class="card hero p-4 mb-3"><div class="text-xs text-zinc-400">ดอกเบี้ยรวมทุกธนาคาร</div><div class="amt text-3xl font-bold text-yellow-300 neon">${baht(i)}</div>${taxBar(i,lim)}</div>
+ ${goalCard()}<div class="grid grid-cols-2 gap-3 mb-3">${cell('ภาษีหัก ณ ที่จ่าย',`<span class="amt">${baht(w)}</span>`+` <span class="text-xs text-zinc-400">(${pw(w,i)})</span>`,'text-rose-400').replace('class="amt font-semibold','class="font-semibold')}${cell('ดอกเบี้ยสุทธิ',baht(i-w),'text-emerald-400')}${cell('ฝากเข้า',baht(sumT('dep',SY)),'text-emerald-400')}${cell('ถอนออก',baht(sumT('wdr',SY)),'text-rose-400')}</div>
+ <div class="card p-4 mb-3"><div class="text-yellow-300 font-bold text-sm mb-2">ดอกเบี้ยรายเดือน</div><div class="amt neon"><svg viewBox="0 0 312 124" class="w-full"><line x1="0" y1="100" x2="312" y2="100" stroke="#3f3f46"/>${m.map((v,k)=>{const hh=v/mx*90;return`<rect x="${k*26+4}" y="${100-hh}" width="18" height="${v>0?Math.max(hh,2):0}" rx="3" fill="#facc15"><title>${MN[k]} ${baht(v)}</title></rect><text x="${k*26+13}" y="114" font-size="8" text-anchor="middle" fill="#a1a1aa">${MN[k]}</text>`}).join('')}</svg></div></div>
+ ${whtCard(i,w)}${accCard()}<div class="text-yellow-300 font-bold text-sm mb-2">แยกตามธนาคาร</div>`;
+ if(!A.length)return h+'<div class="card p-6 text-center text-zinc-400">ยังไม่มีบัญชี</div>';
+ [...new Set(A.map(a=>a.bank))].forEach(n=>{const L=A.filter(a=>a.bank===n),LA=L.filter(a=>!a.closed),b=LA.reduce((x,a)=>x+bal(a),0),ids=new Set(L.map(a=>a.id)),
+  bi=S.txs.filter(t=>t.type==='int'&&ids.has(t.acct)&&t.date.slice(0,4)===SY).reduce((x,t)=>x+t.amt,0),bw=S.txs.filter(t=>t.type==='wht'&&ids.has(t.acct)&&t.date.slice(0,4)===SY).reduce((x,t)=>x+t.amt,0),
+  ann=LA.reduce((x,a)=>x+ia(a)*365/dsA(a),0),r=(x=>x>0?ann/x*100:null)(LA.reduce((q,a)=>q+avgBal(a),0)),sh=tot>0?b/tot*100:0,mb=mnet([...ids],SY),sa=mb.reduce((x,v)=>x+v,0)/ME();
+  h+=`<div class="card p-4 mb-3"><div class="flex justify-between"><b>${esc(n)}</b><b class="amt text-yellow-300">${baht(b)}</b></div>
+  <div class="h-2 rounded bg-zinc-800 mt-2 overflow-hidden"><div class="h-full bg-yellow-400" style="width:${Math.max(0,Math.min(100,sh))}%"></div></div><div class="text-xs text-zinc-400 mt-1">${sh.toFixed(1)}% ของยอดรวม · ${LA.length} ผลิตภัณฑ์${L.length>LA.length?' · ปิดแล้ว '+(L.length-LA.length):''}</div>
+  <div class="grid grid-cols-3 gap-2 mt-3 text-xs"><div><div class="text-zinc-500">ดอกเบี้ย</div><div class="amt text-emerald-400">${baht(bi)}</div></div><div><div class="text-zinc-500">หัก ณ ที่จ่าย</div><div class="text-rose-400"><span class="amt">${baht(bw)}</span> <span class="text-zinc-400">(${pw(bw,bi)})</span></div></div><div><div class="text-zinc-500">เฉลี่ย (ประมาณ)</div><div class="text-yellow-300">${pct(r)}</div></div></div><div class="text-xs text-zinc-500 mt-3">เงินสะสมเพิ่มรายเดือน · เฉลี่ย <span class="amt ${sa<0?'text-rose-400':'text-emerald-400'}">${baht(sa)}</span>/เดือน</div><div class="amt">${bars(mb,40)}</div></div>`});
+ return h}
+function bindSum(){$('#sy').onchange=e=>{SY=e.target.value;render()}}
+
+const ME=()=>SY===CY()?new Date().getMonth()+1:12;
+function mnet(ids,y){const m=Array(12).fill(0);S.txs.forEach(t=>{if(t.type==='open'||t.date.slice(0,4)!==y)return;const k=+t.date.slice(5,7)-1;ids.forEach(id=>m[k]+=dl(t,id))});return m}
+function bars(m,H=90){const mx=Math.max(...m.map(Math.abs),1),neg=m.some(v=>v<0),b=neg?H/2+10:H+10,sc=neg?H/2:H;
+ return`<svg viewBox="0 0 312 ${H+30}" class="w-full"><line x1="0" y1="${b}" x2="312" y2="${b}" stroke="#3f3f46"/>${m.map((v,k)=>{const h=Math.abs(v)/mx*sc;return`<rect x="${k*26+4}" y="${v<0?b:b-h}" width="18" height="${v?Math.max(h,2):0}" rx="3" fill="${v<0?'#fb7185':'#34d399'}"><title>${MN[k]} ${baht(v)}</title></rect><text x="${k*26+13}" y="${H+26}" font-size="8" text-anchor="middle" fill="#a1a1aa">${MN[k]}</text>`}).join('')}</svg>`}
+function accCard(){const ids=S.accts.map(a=>a.id),m=mnet(ids,SY),tt=m.reduce((x,v)=>x+v,0);
+ return`<div class="card p-4 mb-3"><div class="text-yellow-300 font-bold text-sm">เงินสะสมเพิ่มรายเดือน (รวมทุกธนาคาร)</div><div class="flex justify-between text-sm mt-2"><span>รวมปีนี้ <b class="amt ${tt<0?'text-rose-400':'text-emerald-400'}">${baht(tt)}</b></span><span>เฉลี่ย <b class="amt">${baht(tt/ME())}</b>/เดือน</span></div><div class="amt mt-2">${bars(m)}</div><div class="text-xs text-zinc-500">ไม่รวมยอดยกมา รวมฝาก ถอน ดอกเบี้ย ภาษี และการปรับปรุงยอด</div></div>`}
+function avgs(){const f=fn=>S.txs.filter(fn).map(t=>t.date).sort()[0],mo=d=>Math.max(1,dsince(d)/30.4375),
+ d1=f(t=>t.type==='int'),d2=f(t=>t.type!=='open'),ids=act().map(a=>a.id),
+ acc=S.txs.filter(t=>t.type!=='open').reduce((x,t)=>x+ids.reduce((y,id)=>y+dl(t,id),0),0);
+ return{mi:d1?(sumT('int')-sumT('wht'))/mo(d1):0,ma:d2?acc/mo(d2):0}}
+function goalCard(){const g=S.goal;
+ if(!g.amt)return`<div class="card p-4 mb-3 text-sm flex justify-between items-center"><span>ยังไม่ได้ตั้งเป้าเงินฝาก</span><button id="gs" class="btn2">ตั้งเป้า</button></div>`;
+ const tot=act().reduce((x,a)=>x+bal(a),0),left=g.amt-tot,pc=Math.max(0,Math.min(100,tot/g.amt*100)),av=avgs(),mi=g.mi>0?g.mi:av.mi;
+ const est=r=>{if(left<=0)return'ถึงเป้าแล้ว 🎉';if(!(r>0))return'ยังประมาณไม่ได้';const d=Math.ceil(left/(r/30.4375));
+  return d>36500?'นานเกิน 100 ปี':`<b class="text-yellow-300">${d.toLocaleString('en-US')} วัน</b> <span class="text-zinc-500">(ราว ${ymd(new Date(Date.now()+d*864e5))})</span>`};
+ return`<div class="card p-4 mb-3"><div class="flex justify-between text-sm"><span class="text-yellow-300 font-bold">เป้าเงินฝากสะสม</span><span class="amt font-semibold">${baht(g.amt)}</span></div>
+ <div class="h-2 rounded bg-zinc-800 mt-2 overflow-hidden"><div class="h-full bg-yellow-400" style="width:${pc}%"></div></div>
+ <div class="text-xs text-zinc-400 mt-1">${pc.toFixed(1)}% · ${left>0?'เหลืออีก <span class="amt">'+baht(left)+'</span>':'บรรลุเป้าแล้ว'}</div>
+ <div class="text-sm mt-3 space-y-2"><div>ดอกเบี้ยสุทธิ <span class="amt">${baht(mi)}</span>/เดือน${g.mi>0?' (กำหนดเอง)':' (ค่าเฉลี่ยจริง)'}<br>ถึงเป้าใน ${est(mi)}</div>
+ <div>เงินสะสมเพิ่มเฉลี่ย <span class="amt">${baht(av.ma)}</span>/เดือน<br>ถึงเป้าใน ${est(av.ma)}</div></div></div>`}
+
+const taxRate=()=>S.tax.rate??15,pw=(w,i)=>i>0?(w/i*100).toFixed(2)+'%':'-';
+function whtCard(i,w){const r=taxRate(),ex=i*r/100,d=w-ex;
+ return`<div class="card p-4 mb-3"><div class="text-yellow-300 font-bold text-sm">ภาษีหัก ณ ที่จ่ายปี ${SY}</div>
+ <div class="amt text-2xl font-bold text-rose-400 mt-1">${baht(w)}</div><div class="text-sm mt-1">คิดเป็น <b class="text-yellow-300">${pw(w,i)}</b> ของดอกเบี้ย <span class="amt">${baht(i)}</span></div>
+ <div class="text-xs text-zinc-400 mt-2">อัตราที่ตั้งไว้ ${r}% → ควรหัก <span class="amt">${baht(ex)}</span> · ${Math.abs(d)<0.5?'ตรงกับที่คาด':d>0?'หักมากกว่าที่คาด <span class="amt">'+baht(d)+'</span>':'หักน้อยกว่าที่คาด <span class="amt">'+baht(-d)+'</span>'}</div>
+ <div class="text-xs text-zinc-500 mt-1">ปรับอัตราได้ที่ ตั้งค่า > เงื่อนไขการเสียภาษี</div></div>`}
+
+const IT_NEW=600000,LBL={pattern:'รูปแบบ',pin:'PIN 6 หลัก',pass:'รหัสผ่านข้อความ'},NEXT={pattern:'pin',pin:'pass',pass:'pattern'},TYL={sav:'ออมทรัพย์',fix:'ฝากประจำ',oth:'อื่น ๆ'};
+let IT=250000;
+function negs(list){const b={},out=[],o=t=>(t.type==='wdr'||t.type==='wht'||t.type==='xfer')?1:0;
+ [...list].sort((x,y)=>x.date.localeCompare(y.date)||o(x)-o(y)).forEach(t=>[t.acct,t.to].filter(Boolean).forEach(id=>{b[id]=r2((b[id]||0)+dl(t,id));if(b[id]<0&&!out.some(z=>z.id===id))out.push({id,date:t.date,v:b[id]})}));return out}
+const newNeg=L=>{const c=negs(S.txs);return negs(L).filter(x=>!c.some(y=>y.id===x.id))},badMsg=b=>b.map(x=>lab(x.id).replace(/&amp;/g,'&')+' ตั้งแต่ '+x.date).join(', ');
+const negBanner=()=>{const n=negs(S.txs).filter(x=>S.accts.some(a=>a.id===x.id&&!a.closed));return n.length?`<div class="card p-3 mb-3 text-sm text-orange-300" style="border-color:rgba(251,146,60,.5)">⚠️ ยอดติดลบ: ${n.map(x=>lab(x.id)+' ตั้งแต่ '+x.date).join(', ')} — ตรวจสอบธุรกรรมที่เกี่ยวข้อง</div>`:''};
+function matLine(a){if(!a.mat)return'';const d=dd(today(),a.mat);return`<div class="text-xs mt-1 ${d<=30?'text-orange-300':'text-zinc-400'}">${d<0?'ครบกำหนดแล้ว '+(-d)+' วัน':d===0?'ครบกำหนดวันนี้':'ครบกำหนด '+a.mat+' (อีก '+d+' วัน)'}</div>`}
+function matCard(){const L=act().filter(a=>a.mat&&dd(today(),a.mat)<=60).sort((x,y)=>x.mat.localeCompare(y.mat));if(!L.length)return'';
+ return`<div class="card p-4 mb-3"><div class="text-yellow-300 font-bold text-sm mb-2">ใกล้ครบกำหนดฝาก</div>${L.map(a=>`<div class="flex justify-between items-center py-1 text-sm"><div>${esc(a.bank)} · ${esc(a.product)}${matLine(a)}</div><span class="amt">${baht(bal(a))}</span></div>`).join('')}</div>`}
+function icsDl(a){const n=new Date(a.mat);n.setDate(n.getDate()+1);const c=x=>x.replace(/-/g,'');
+ const t=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//DepositDigital//TH\r\nBEGIN:VEVENT\r\nUID:${a.id}@deposit-digital\r\nDTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').slice(0,15)}Z\r\nDTSTART;VALUE=DATE:${c(a.mat)}\r\nDTEND;VALUE=DATE:${c(ymd(n))}\r\nSUMMARY:ครบกำหนดฝาก ${a.bank} ${a.product}\r\nBEGIN:VALARM\r\nTRIGGER:-P7D\r\nACTION:DISPLAY\r\nDESCRIPTION:ใกล้ครบกำหนดฝาก\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR`;
+ const l=document.createElement('a');l.href=URL.createObjectURL(new Blob([t],{type:'text/calendar'}));l.download='maturity.ics';l.click();toast('ไฟล์ปฏิทินมีชื่อธนาคารและผลิตภัณฑ์ของคุณ')}
+function render(){if(mig())save();
+ $('#app').classList.toggle('hide',S.hide);$('#eye').classList.toggle('act',S.hide);
+ document.querySelectorAll('.nv').forEach(b=>b.classList.toggle('text-yellow-300',b.dataset.p===PAGE));
+ const T={home:'หน้าแรก',sum:'สรุปยอด'};
+ $('#main').innerHTML=PAGE==='set'?settings():PAGE==='acc'?accounts():PAGE==='tx'?txPage():PAGE==='home'?home():PAGE==='sum'?summary():soon(T[PAGE]);if(PAGE==='set')bind();if(PAGE==='acc')bindAcc();if(PAGE==='tx')bindTx();if(PAGE==='home')bindHome();if(PAGE==='sum')bindSum();bindCards()}
+function bind(){
+ $('#addb').onclick=async()=>{const n=$('#bn').value.trim(),p=$('#bp').value.trim();if(!n)return toast('กรอกชื่อธนาคาร');S.banks.push({name:n,product:p||'-'});await save();render()};
+ document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{S.banks.splice(+b.dataset.del,1);await save();render()});
+ $('#stl').onclick=async()=>{S.tax.limit=Math.max(0,parseFloat($('#tl').value)||0);S.tax.rate=Math.max(0,parseFloat($('#tr').value)||0);await save();render();toast('บันทึกแล้ว')};
+ $('#sgl').onclick=async()=>{S.goal={amt:Math.max(0,parseFloat($('#gt').value)||0),mi:Math.max(0,parseFloat($('#gm').value)||0)};await save();toast('บันทึกเป้าแล้ว')};
+ $('#hd').onchange=async e=>{S.hide=e.target.checked;await save();render()};
+ $('#al').onchange=async e=>{S.autoLock=+e.target.value;await save();arm()};
+ $('#chg').onclick=async()=>{const keep=S;await setupLockOver(keep)};
+ $('#bk').onclick=backup;$('#rs').onchange=restore;
+ $('#cu').onclick=async()=>{if(!SW_REG)return toast('ตรวจไม่ได้ (ต้องออนไลน์และรองรับ Service Worker)');try{await SW_REG.update();setTimeout(()=>{if(!SW_REG.installing&&!SW_REG.waiting)toast('เป็นเวอร์ชันล่าสุดแล้ว')},1500)}catch(e){toast('ตรวจไม่สำเร็จ ลองใหม่เมื่อออนไลน์')}};
+ $('#mkt').onclick=()=>{const t=b64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');$('#st').value=t;navigator.clipboard?.writeText(t).catch(()=>{});toast('สร้างและคัดลอกแล้ว กด “บันทึกค่า” และวางใน Script Properties')};
+ $('#ss').onclick=async()=>{if($('#sp').value&&$('#sp').value.length<8)return toast('รหัสผ่านสำรองต้องมี 8 ตัวอักษรขึ้นไป');const tk=$('#st').value.trim();if(tk&&tk.length<24)return toast('Token ต้องยาวอย่างน้อย 24 ตัวอักษร กดสร้างแบบสุ่มได้');S.sheets.url=$('#su').value.trim();S.sheets.token=tk;S.bp=$('#sp').value;S.sheets.auto=$('#sa').checked;await save();toast('บันทึกแล้ว')};
+ $('#sn').onclick=()=>sendSheets(false);$('#sd').onclick=()=>sendCloud('drive');
+ $('#rcs').onclick=async()=>{const b=await cloud('sheet');b&&applyBlob(b)};$('#rcd').onclick=async()=>{const b=await cloud('drive');b&&applyBlob(b)}}
+async function setupLockOver(keep){$('#app').classList.add('hidden');$('#lock').classList.remove('hidden');await setupLock(keep);$('#lock').classList.add('hidden');$('#app').classList.remove('hidden');render();toast('เปลี่ยนการล็อกแล้ว')}
+async function backupBlob(st=S){if(st.bp){const salt=crypto.getRandomValues(new Uint8Array(16));return{v:VER,bp:true,mode:MODE,it:IT_NEW,salt:b64(salt),...await seal(st,await dk(st.bp,salt,IT_NEW))}}
+ return{v:VER,bp:false,...JSON.parse(localStorage.getItem('dd_vault'))}}
+async function backup(){const b=await backupBlob();const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(b)],{type:'application/json'}));
+ a.download=`DepositDigital_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();S.lastBackup=Date.now();await save();render();toast('สำรองแล้ว')}
+async function restore(e){const f=e.target.files[0];if(f)applyBlob(JSON.parse(await f.text()))}
+async function applyBlob(b){if(!confirm('ข้อมูลปัจจุบันจะถูกแทนที่ ดำเนินการต่อ?'))return;try{if(!b.bp){localStorage.setItem('dd_vault',JSON.stringify(b));location.reload();return}
+ const pw=prompt('ใส่รหัสผ่านสำรอง');S=Object.assign(DEF(),await unseal(b,await dk(pw,ub(b.salt),b.it||250000)));await save();render();toast('กู้คืนแล้ว')}catch(x){toast('กู้คืนไม่สำเร็จ')}}
+async function api(c,action,extra={}){const r=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({token:c.token,action,...extra})});const j=await r.json();if(!j.ok)throw new Error(j.error);return j}
+async function cloud(kind){let c=S&&S.sheets.url&&S.sheets.token?S.sheets:null;
+ if(!c){const url=prompt('URL ของสคริปต์ (Web app)');const token=url&&prompt('Token');if(!token)return null;c={url:url.trim(),token:token.trim()}}
+ try{if(kind==='sheet')return(await api(c,'sheet_get')).file;
+  const l=(await api(c,'list')).files;if(!l.length){toast('ไม่พบไฟล์ใน Drive');return null}
+  const n=parseInt(prompt('เลือกไฟล์ (พิมพ์เลข)\n'+l.map((f,i)=>`${i+1}. ${f.name}`).join('\n')),10);if(!l[n-1])return null;
+  return(await api(c,'drive_get',{id:l[n-1].id})).file}catch(e){toast('เชื่อมต่อไม่สำเร็จ: '+e.message);return null}}
+async function sendCloud(kind,silent){const st=S;if(!S.sheets.url||!S.sheets.token)return silent||toast('ใส่ URL และ Token ก่อน');if(!S.bp)return silent||toast('ตั้งรหัสผ่านสำรองก่อน (ควรยาวกว่า PIN)');
+ try{await api(st.sheets,kind==='drive'?'drive_save':'sheet_save',{file:await backupBlob(st)});if(S===st){st.lastBackup=Date.now();await save(true);silent||(render(),toast('สำรองแล้ว'))}}catch(e){silent||toast('ส่งไม่สำเร็จ: '+e.message)}}
+const sendSheets=s=>sendCloud('sheet',s);
+
+document.querySelectorAll('.nv').forEach(b=>b.onclick=()=>{PAGE=b.dataset.p;FORM=null;TXF=null;IMP=null;render()});
+$('#eye').onclick=async()=>{S.hide=!S.hide;await save();render()};$('#lk').onclick=lockNow;
+let SW_REG=null,RELOAD=false;
+async function initSW(){if(!('serviceWorker' in navigator))return;
+ try{const reg=SW_REG=await navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}),upd=()=>$('#upd').classList.remove('hidden');
+  if(reg.waiting&&navigator.serviceWorker.controller)upd();
+  reg.addEventListener('updatefound',()=>{const w=reg.installing;w&&w.addEventListener('statechange',()=>{if(w.state==='installed'&&navigator.serviceWorker.controller)upd()})});
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(RELOAD)location.reload()});
+  $('#updb').onclick=async()=>{if(S&&S.sheets.auto&&S.bp&&S.sheets.url)await sendSheets(true);const w=reg.waiting;if(w){RELOAD=true;w.postMessage({type:'SKIP_WAITING'})}else location.reload()};
+  setInterval(()=>reg.update().catch(()=>{}),18e5);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update().catch(()=>{})})
+ }catch(e){}}
+initSW();
+boot();
+</script></body></html>
