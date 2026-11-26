@@ -3,6 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0a">
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Deposit Digital</title>
 <link rel="stylesheet" href="tw.css">
@@ -22,8 +23,8 @@
 
 <div id="app" class="hidden max-w-md mx-auto min-h-screen pb-28">
  <header class="hdr sticky top-0 bg-neutral-950/90 backdrop-blur z-20">
-  <div class="hrow1"><div class="hbrand"><img src="icon-192.png" alt="" class="hlogo"><span class="htitle">Deposit Digital</span></div><div class="hbtns"><button id="eye" class="ib" aria-label="ซ่อนหรือแสดงยอดเงิน">👁️</button><button id="lk" class="ib" aria-label="ล็อกแอป">🔓</button></div></div>
-  <div id="hsub" class="hrow2"></div>
+  <div class="hbrand"><img src="icon-192.png" alt="" class="hlogo"><div class="htxt"><span class="htitle">Deposit Digital</span><span id="hsub" class="rft"></span></div></div>
+  <div class="hbtns"><button id="eye" class="ib" aria-label="ซ่อนหรือแสดงยอดเงิน">👁️</button><button id="lk" class="ib" aria-label="ล็อกแอป">🔓</button><button id="rfb" class="ib rfbtn" aria-label="รีเฟรชหน้านี้" title="รีเฟรช">🔄</button></div>
  </header>
  <main id="main" class="px-4"></main>
  <nav class="nvbar fixed bottom-0 inset-x-0 max-w-md mx-auto bg-zinc-950/95 border-t border-yellow-400/30" style="padding-bottom:calc(env(safe-area-inset-bottom) + .4rem)">
@@ -39,7 +40,7 @@
 <div id="upd" class="hidden fixed inset-x-4 z-[70] max-w-md mx-auto" style="bottom:calc(env(safe-area-inset-bottom) + 6.5rem)"><div class="card hero p-3 flex items-center justify-between gap-3 text-sm"><span>✨ มีเวอร์ชันใหม่พร้อมใช้งาน</span><button id="updb" class="btn !py-1.5">อัปเดต</button></div></div>
 
 <script>
-const VER='1.12.2';
+const VER='1.12.3';
 const $=s=>document.querySelector(s), enc=new TextEncoder(), dec=new TextDecoder();
 const b64=u=>btoa(String.fromCharCode(...new Uint8Array(u))), ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const baht=n=>{const v=Number(n||0);return(v<0?'-':'')+'฿'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
@@ -466,14 +467,14 @@ function icsDl(a){const n=new Date(a.mat);n.setDate(n.getDate()+1);const c=x=>x.
  const t=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//DepositDigital//TH\r\nBEGIN:VEVENT\r\nUID:${a.id}@deposit-digital\r\nDTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').slice(0,15)}Z\r\nDTSTART;VALUE=DATE:${c(a.mat)}\r\nDTEND;VALUE=DATE:${c(ymd(n))}\r\nSUMMARY:ครบกำหนดฝาก ${a.bank} ${a.product}\r\nBEGIN:VALARM\r\nTRIGGER:-P7D\r\nACTION:DISPLAY\r\nDESCRIPTION:ใกล้ครบกำหนดฝาก\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR`;
  const l=document.createElement('a');l.href=URL.createObjectURL(new Blob([t],{type:'text/calendar'}));l.download='maturity.ics';l.click();toast('ไฟล์ปฏิทินมีชื่อธนาคารและผลิตภัณฑ์ของคุณ')}
 const PT={home:'หน้าแรก',acc:'บัญชี',tx:'ธุรกรรม',sum:'สรุปยอด',set:'ตั้งค่า'};
-const hSub=()=>`<span class="rft">${PT[PAGE]||''}</span><button id="rfb" class="rfbtn" aria-label="รีเฟรชหน้านี้" title="รีเฟรช">🔄</button>`;
+
 function refreshPage(){if(!S)return;if(FORM!==null||TXF!==null||IMP)return toast('กำลังกรอกฟอร์มอยู่ บันทึกหรือยกเลิกก่อนรีเฟรช');
  const b=$('#rfb');b&&b.classList.add('spin');SW_REG&&SW_REG.update().catch(()=>{});setTimeout(()=>{if(!S)return;render();toast('รีเฟรชแล้ว')},350)}
 function render(){if(mig())save();
  $('#app').classList.toggle('hide',S.hide);$('#eye').classList.toggle('act',S.hide);
  document.querySelectorAll('.nv').forEach(b=>b.classList.toggle('text-yellow-300',b.dataset.p===PAGE));
  const T={home:'หน้าแรก',sum:'สรุปยอด'};
- $('#hsub').innerHTML=hSub();$('#main').innerHTML=(PAGE==='set'?settings():PAGE==='acc'?accounts():PAGE==='tx'?txPage():PAGE==='home'?home():PAGE==='sum'?summary():soon(T[PAGE]));if(PAGE==='set')bind();if(PAGE==='acc')bindAcc();if(PAGE==='tx')bindTx();if(PAGE==='home')bindHome();if(PAGE==='sum')bindSum();bindCards()}
+ $('#hsub').textContent=PT[PAGE]||'';$('#main').innerHTML=(PAGE==='set'?settings():PAGE==='acc'?accounts():PAGE==='tx'?txPage():PAGE==='home'?home():PAGE==='sum'?summary():soon(T[PAGE]));if(PAGE==='set')bind();if(PAGE==='acc')bindAcc();if(PAGE==='tx')bindTx();if(PAGE==='home')bindHome();if(PAGE==='sum')bindSum();bindCards()}
 function bind(){
  $('#imt').onclick=csvTemplate;
  $('#imf').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)await csvLoad(f)};
