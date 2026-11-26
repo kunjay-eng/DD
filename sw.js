@@ -1,5 +1,5 @@
 // Deposit Digital Service Worker — แก้ VERSION ทุกครั้งที่ปล่อยเวอร์ชันใหม่ เพื่อให้เบราว์เซอร์ตรวจพบการอัปเดต
-const VERSION = '1.12.0';
+const VERSION = '1.12.1';
 const CACHE = 'dd-' + VERSION;
 const SHELL = ['./', 'index.html', 'tw.css', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 

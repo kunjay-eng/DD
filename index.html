@@ -23,12 +23,12 @@
 <div id="app" class="hidden max-w-md mx-auto min-h-screen pb-28">
  <header class="flex items-center justify-between px-4 py-4 sticky top-0 bg-neutral-950/90 backdrop-blur z-20"><div class="flex items-center gap-3"><img src="icon-192.png" alt="" class="w-11 h-11 rounded-xl"><span class="text-2xl font-bold">Deposit Digital</span></div><div class="flex gap-3"><button id="eye" class="ib" aria-label="ซ่อนหรือแสดงยอดเงิน">👁️</button><button id="lk" class="ib" aria-label="ล็อกแอป">🔓</button></div></header>
  <main id="main" class="px-4"></main>
- <nav class="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-zinc-950/95 border-t border-yellow-400/30 flex items-end justify-around px-2 pt-2" style="padding-bottom:calc(env(safe-area-inset-bottom) + .5rem)">
-  <button data-p="home" class="nv flex-1 text-xs">🏠<br>หน้าแรก</button>
-  <button data-p="acc" class="nv flex-1 text-xs">🏦<br>บัญชี</button>
-  <button data-p="tx" class="nv flex-1 -mt-8"><span class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-yellow-400 text-black text-3xl shadow-[0_0_20px_rgba(250,204,21,0.35)]">⇄</span><span class="text-xs">ธุรกรรม</span></button>
-  <button data-p="sum" class="nv flex-1 text-xs">📊<br>สรุปยอด</button>
-  <button data-p="set" class="nv flex-1 text-xs">⚙️<br>ตั้งค่า</button>
+ <nav class="nvbar fixed bottom-0 inset-x-0 max-w-md mx-auto bg-zinc-950/95 border-t border-yellow-400/30" style="padding-bottom:calc(env(safe-area-inset-bottom) + .4rem)">
+  <button data-p="home" class="nv"><span class="ic">🏠</span><span class="lb">หน้าแรก</span></button>
+  <button data-p="acc" class="nv"><span class="ic">🏦</span><span class="lb">บัญชี</span></button>
+  <button data-p="tx" class="nv nvc" aria-label="ธุรกรรม"><span class="ic"><span class="orb">⇄</span></span><span class="lb">ธุรกรรม</span></button>
+  <button data-p="sum" class="nv"><span class="ic">📊</span><span class="lb">สรุปยอด</span></button>
+  <button data-p="set" class="nv"><span class="ic">⚙️</span><span class="lb">ตั้งค่า</span></button>
  </nav>
 </div>
 <div id="toast" class="fixed top-4 inset-x-4 z-[60] hidden text-center"><span class="btn inline-block"></span></div>
@@ -36,7 +36,7 @@
 <div id="upd" class="hidden fixed inset-x-4 z-[70] max-w-md mx-auto" style="bottom:calc(env(safe-area-inset-bottom) + 6.5rem)"><div class="card hero p-3 flex items-center justify-between gap-3 text-sm"><span>✨ มีเวอร์ชันใหม่พร้อมใช้งาน</span><button id="updb" class="btn !py-1.5">อัปเดต</button></div></div>
 
 <script>
-const VER='1.12.0';
+const VER='1.12.1';
 const $=s=>document.querySelector(s), enc=new TextEncoder(), dec=new TextDecoder();
 const b64=u=>btoa(String.fromCharCode(...new Uint8Array(u))), ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const baht=n=>{const v=Number(n||0);return(v<0?'-':'')+'฿'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
@@ -178,14 +178,16 @@ function closedCard(){const C=S.accts.map((a,i)=>[a,i]).filter(([a])=>a.closed);
   C.map(([a,i])=>`<div class="bg-zinc-900 rounded-lg p-3 opacity-80"><div class="flex justify-between"><div><div class="font-semibold">${esc(a.bank)} · ${esc(a.product)}</div><div class="text-xs text-zinc-400">${TYL[a.type||'sav']} · ${a.since} → ${a.closed}</div></div><div class="text-yellow-300 font-bold">${pct(rate(a))}</div></div>
   <div class="flex justify-between text-xs mt-1"><span class="amt">ยอดตอนปิด ${baht(bal(a))}</span><span class="amt text-emerald-400">ดอกเบี้ย ${baht(ia(a))}</span></div>
   <div class="flex gap-4 mt-2 text-xs"><button data-ro="${i}" class="text-yellow-300">เปิดบัญชีอีกครั้ง</button><button data-dl="${i}" class="text-rose-400">ลบถาวร</button></div></div>`).join(''))}
-function accounts(){const A=S.accts,AA=act(),tot=AA.reduce((t,a)=>t+bal(a),0),ti=A.reduce((t,a)=>t+ia(a),0),
+function totCard(){const A=S.accts,AA=act(),tot=AA.reduce((t,a)=>t+bal(a),0),ti=A.reduce((t,a)=>t+ia(a),0),nb=new Set(AA.map(a=>a.bank)).size,
  avg=rateAgg(AA),lim=S.tax.limit,pc=lim?Math.min(100,ti/lim*100):0;
- let h=negBanner()+`<div class="card hero p-4 mt-2 mb-3"><div class="text-xs text-zinc-400">ยอดฝากรวม${A.length>AA.length?' (ไม่รวมบัญชีที่ปิด)':''}</div><div class="amt text-3xl font-bold text-yellow-300 neon">${baht(tot)}</div>
+ return`<div class="card hero p-4 mt-2 mb-3"><div class="text-xs text-zinc-400">ยอดเงินฝากรวมทั้งหมด${A.length>AA.length?' (ไม่รวมบัญชีที่ปิด)':''}</div><div class="amt text-3xl font-bold text-yellow-300 neon">${baht(tot)}</div>
  <div class="grid grid-cols-2 gap-3 mt-3 text-sm"><div><div class="text-xs text-zinc-400">ดอกเบี้ยที่ได้รับ</div><div class="amt text-emerald-400 font-semibold">${baht(ti)}</div></div>
  <div><div class="text-xs text-zinc-400">ดอกเบี้ยเฉลี่ย (ประมาณ)</div><div class="text-yellow-300 font-semibold">${pct(avg)} ต่อปี</div></div></div>
- <div class="mt-3 text-xs text-zinc-400">เทียบเกณฑ์ภาษี <span class="amt">${baht(lim)}</span></div><div class="h-2 rounded bg-zinc-800 mt-1 overflow-hidden"><div class="h-full ${ti>lim?'bg-rose-400':'bg-yellow-400'}" style="width:${pc}%"></div></div></div>`;
- if(FORM!==null)return h+accForm();
- h+='<button id="adda" class="btn w-full mb-3">+ เพิ่มบัญชี</button>';
+ <div class="mt-3 text-xs text-zinc-400">เทียบเกณฑ์ภาษี <span class="amt">${baht(lim)}</span></div><div class="h-2 rounded bg-zinc-800 mt-1 overflow-hidden"><div class="h-full ${ti>lim?'bg-rose-400':'bg-yellow-400'}" style="width:${pc}%"></div></div>
+ <div class="text-xs text-zinc-400 mt-3">${AA.length} บัญชี · ${nb} ธนาคาร</div></div>`}
+function accounts(){const A=S.accts,AA=act();
+ let h=negBanner()+'<button id="adda" class="btn w-full mt-2 mb-3">+ เพิ่มบัญชี</button>';
+ if(FORM!==null)return negBanner()+accForm();
  if(!A.length)return h+'<div class="card p-6 text-center text-zinc-400">ยังไม่มีบัญชี กด “เพิ่มบัญชี” เพื่อเริ่มต้น</div>';
  [...new Set(AA.map(a=>a.bank))].forEach(n=>{const L=A.map((a,i)=>[a,i]).filter(([a])=>!a.closed&&a.bank===n),sub=L.reduce((t,[a])=>t+bal(a),0);
   h+=card('ac_'+n,`${esc(n)}<span class="amt block text-xs text-zinc-300 font-normal">${baht(sub)} · ${L.length} ผลิตภัณฑ์</span>`,
@@ -342,8 +344,8 @@ const sumT=(ty,y)=>r2(S.txs.filter(t=>t.type===ty&&(!y||t.date.slice(0,4)===y)).
 const taxBar=(i,lim)=>{const pc=lim?i/lim*100:0,c=pc>=100?'bg-rose-400':pc>=80?'bg-orange-400':'bg-yellow-400';
  return`<div class="h-2 rounded bg-zinc-800 mt-2 overflow-hidden"><div class="h-full ${c}" style="width:${Math.min(100,pc)}%"></div></div><div class="text-xs mt-1 ${pc>=100?'text-rose-400':'text-zinc-400'}">${lim?(i>=lim?'เกินเกณฑ์ที่ตั้งไว้ <span class="amt">'+baht(i-lim)+'</span>':'เหลืออีก <span class="amt">'+baht(lim-i)+'</span> ก่อนถึงเกณฑ์')+' ('+pc.toFixed(1)+'%)':'ยังไม่ได้ตั้งเกณฑ์'}</div>`};
 function openTx(ty){const L=act();if(!L.length)return toast('ไม่มีบัญชีที่เปิดอยู่');TXD={type:ty,acct:L[0].id,to:(L[1]||L[0]).id,amt:'',date:today(),note:''};TXF=-1;PAGE='tx';render()}
-function home(){const A=act(),tot=A.reduce((x,a)=>x+bal(a),0),y=CY(),nb=new Set(A.map(a=>a.bank)).size;
- let h=`<div class="card hero p-5 mt-2 mb-3"><div class="text-xs text-zinc-400">ยอดฝากรวมทุกธนาคาร</div><div class="amt text-4xl font-bold text-yellow-300 neon mt-1">${baht(tot)}</div><div class="text-xs text-zinc-400 mt-2">${A.length} บัญชี · ${nb} ธนาคาร</div></div>`;
+function home(){const A=act(),y=CY();
+ let h=totCard();
  if(!A.length)return h+`<div class="card p-6 text-center"><div class="text-zinc-300">เริ่มต้นด้วยการเพิ่มบัญชีแรกของคุณ</div><button id="hg" class="btn w-full mt-4">ไปที่บัญชี</button></div>`;
  h+=negBanner()+`<div class="grid grid-cols-4 gap-2 mb-3">${[['dep','⬇️','ฝาก'],['wdr','⬆️','ถอน'],['int','✨','ดอกเบี้ย'],['xfer','🔁','โอน']].map(([k,e,t])=>`<button data-q="${k}" class="card py-3 text-center"><div class="text-2xl">${e}</div><div class="text-xs mt-1 text-yellow-200">${t}</div></button>`).join('')}</div>
  `;
@@ -454,7 +456,7 @@ function icsDl(a){const n=new Date(a.mat);n.setDate(n.getDate()+1);const c=x=>x.
  const t=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//DepositDigital//TH\r\nBEGIN:VEVENT\r\nUID:${a.id}@deposit-digital\r\nDTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').slice(0,15)}Z\r\nDTSTART;VALUE=DATE:${c(a.mat)}\r\nDTEND;VALUE=DATE:${c(ymd(n))}\r\nSUMMARY:ครบกำหนดฝาก ${a.bank} ${a.product}\r\nBEGIN:VALARM\r\nTRIGGER:-P7D\r\nACTION:DISPLAY\r\nDESCRIPTION:ใกล้ครบกำหนดฝาก\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR`;
  const l=document.createElement('a');l.href=URL.createObjectURL(new Blob([t],{type:'text/calendar'}));l.download='maturity.ics';l.click();toast('ไฟล์ปฏิทินมีชื่อธนาคารและผลิตภัณฑ์ของคุณ')}
 const PT={home:'หน้าแรก',acc:'บัญชี',tx:'ธุรกรรม',sum:'สรุปยอด',set:'ตั้งค่า'};
-const rfRow=()=>`<div class="rfrow"><span class="rft">${PT[PAGE]||''}</span><button id="rfb" class="rfbtn" aria-label="รีเฟรชหน้านี้">🔄 รีเฟรช</button></div>`;
+const rfRow=()=>`<div class="rfrow"><span class="rft">${PT[PAGE]||''}</span><button id="rfb" class="rfbtn" aria-label="รีเฟรชหน้านี้" title="รีเฟรช">🔄</button></div>`;
 function refreshPage(){if(!S)return;if(FORM!==null||TXF!==null||IMP)return toast('กำลังกรอกฟอร์มอยู่ บันทึกหรือยกเลิกก่อนรีเฟรช');
  const b=$('#rfb');b&&b.classList.add('spin');SW_REG&&SW_REG.update().catch(()=>{});setTimeout(()=>{if(!S)return;render();toast('รีเฟรชแล้ว')},350)}
 function render(){if(mig())save();
