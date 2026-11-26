@@ -36,7 +36,7 @@
 <div id="upd" class="hidden fixed inset-x-4 z-[70] max-w-md mx-auto" style="bottom:calc(env(safe-area-inset-bottom) + 6.5rem)"><div class="card hero p-3 flex items-center justify-between gap-3 text-sm"><span>✨ มีเวอร์ชันใหม่พร้อมใช้งาน</span><button id="updb" class="btn !py-1.5">อัปเดต</button></div></div>
 
 <script>
-const VER='1.11.0';
+const VER='1.12.0';
 const $=s=>document.querySelector(s), enc=new TextEncoder(), dec=new TextDecoder();
 const b64=u=>btoa(String.fromCharCode(...new Uint8Array(u))), ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const baht=n=>{const v=Number(n||0);return(v<0?'-':'')+'฿'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
@@ -122,7 +122,7 @@ function settings(){
  const banks=S.banks.map((b,i)=>`<div class="flex justify-between items-center bg-zinc-900 rounded-lg p-2"><div><div class="font-semibold">${esc(b.name)}</div><div class="text-xs text-zinc-400">${esc(b.product)}</div></div><button data-del="${i}" class="text-rose-400 px-2">ลบ</button></div>`).join('')||'<div class="text-zinc-500">ยังไม่มีรายการ</div>';
  return card('bank','ตั้งค่าธนาคารและผลิตภัณฑ์',`${banks}<input id="bn" placeholder="ชื่อธนาคาร"><input id="bp" placeholder="ผลิตภัณฑ์ เช่น ออมทรัพย์, ฝากประจำ"><button id="addb" class="btn w-full">เพิ่มรายการ</button>`)
  +card('tax','ตั้งค่าเงื่อนไขการเสียภาษี',`<div class="text-zinc-300">รวมทุกธนาคาร ดอกเบี้ยเกิน <b class="text-yellow-300 amt">${baht(S.tax.limit)}</b></div><label class="block">เกณฑ์ดอกเบี้ย (฿)<input id="tl" type="number" step="0.01" value="${S.tax.limit}"></label><label class="block">อัตราหัก ณ ที่จ่ายที่คาดไว้ (%)<input id="tr" type="number" step="0.01" min="0" value="${taxRate()}"></label><button id="stl" class="btn w-full">บันทึก</button>`)
- +card('goal','เป้าเงินฝากสะสม',`<label class="block">เป้ายอดฝากรวม (฿)<input id="gt" type="number" step="0.01" min="0" value="${S.goal.amt||''}"></label><label class="block">ดอกเบี้ยต่อเดือนที่ใช้คำนวณ (฿) เว้นว่าง = ใช้ค่าเฉลี่ยจริง<input id="gm" type="number" step="0.01" min="0" value="${S.goal.mi||''}"></label><button id="sgl" class="btn w-full">บันทึกเป้า</button>`)
+ +card('goal','เป้าหมายการออม',`<label class="block">เป้ายอดฝากรวม (฿)<input id="gt" type="number" step="0.01" min="0" value="${S.goal.amt||''}"></label><label class="block">ดอกเบี้ยต่อเดือนที่ใช้คำนวณ (฿) เว้นว่าง = ใช้ค่าเฉลี่ยจริง<input id="gm" type="number" step="0.01" min="0" value="${S.goal.mi||''}"></label><button id="sgl" class="btn w-full">บันทึกเป้า</button>`)
  +card('priv','ความเป็นส่วนตัว',`<label class="flex justify-between items-center">ซ่อนยอดเงิน<input id="hd" type="checkbox" class="!w-5 !h-5" ${S.hide?'checked':''}></label>
  <label class="block">ล็อกอัตโนมัติหลังไม่ใช้งาน<select id="al">${[[0,'ไม่ล็อก'],[30,'30 วินาที'],[60,'1 นาที'],[300,'5 นาที'],[900,'15 นาที']].map(([v,t])=>`<option value="${v}" ${S.autoLock==v?'selected':''}>${t}</option>`).join('')}</select></label>
  <button id="chg" class="btn2 w-full">เปลี่ยน PIN / รูปแบบ</button>`)
@@ -342,14 +342,12 @@ const sumT=(ty,y)=>r2(S.txs.filter(t=>t.type===ty&&(!y||t.date.slice(0,4)===y)).
 const taxBar=(i,lim)=>{const pc=lim?i/lim*100:0,c=pc>=100?'bg-rose-400':pc>=80?'bg-orange-400':'bg-yellow-400';
  return`<div class="h-2 rounded bg-zinc-800 mt-2 overflow-hidden"><div class="h-full ${c}" style="width:${Math.min(100,pc)}%"></div></div><div class="text-xs mt-1 ${pc>=100?'text-rose-400':'text-zinc-400'}">${lim?(i>=lim?'เกินเกณฑ์ที่ตั้งไว้ <span class="amt">'+baht(i-lim)+'</span>':'เหลืออีก <span class="amt">'+baht(lim-i)+'</span> ก่อนถึงเกณฑ์')+' ('+pc.toFixed(1)+'%)':'ยังไม่ได้ตั้งเกณฑ์'}</div>`};
 function openTx(ty){const L=act();if(!L.length)return toast('ไม่มีบัญชีที่เปิดอยู่');TXD={type:ty,acct:L[0].id,to:(L[1]||L[0]).id,amt:'',date:today(),note:''};TXF=-1;PAGE='tx';render()}
-function home(){const A=act(),tot=A.reduce((x,a)=>x+bal(a),0),y=CY(),i=sumT('int',y),w=sumT('wht',y),nb=new Set(A.map(a=>a.bank)).size;
+function home(){const A=act(),tot=A.reduce((x,a)=>x+bal(a),0),y=CY(),nb=new Set(A.map(a=>a.bank)).size;
  let h=`<div class="card hero p-5 mt-2 mb-3"><div class="text-xs text-zinc-400">ยอดฝากรวมทุกธนาคาร</div><div class="amt text-4xl font-bold text-yellow-300 neon mt-1">${baht(tot)}</div><div class="text-xs text-zinc-400 mt-2">${A.length} บัญชี · ${nb} ธนาคาร</div></div>`;
  if(!A.length)return h+`<div class="card p-6 text-center"><div class="text-zinc-300">เริ่มต้นด้วยการเพิ่มบัญชีแรกของคุณ</div><button id="hg" class="btn w-full mt-4">ไปที่บัญชี</button></div>`;
  h+=negBanner()+`<div class="grid grid-cols-4 gap-2 mb-3">${[['dep','⬇️','ฝาก'],['wdr','⬆️','ถอน'],['int','✨','ดอกเบี้ย'],['xfer','🔁','โอน']].map(([k,e,t])=>`<button data-q="${k}" class="card py-3 text-center"><div class="text-2xl">${e}</div><div class="text-xs mt-1 text-yellow-200">${t}</div></button>`).join('')}</div>
- <div class="card p-4 mb-3"><div class="flex justify-between text-sm"><span class="text-yellow-300 font-bold">ดอกเบี้ยปี ${y}</span><span class="amt font-semibold">${baht(i)}</span></div>${taxBar(i,S.tax.limit)}<div class="text-xs text-zinc-500 mt-2">หัก ณ ที่จ่ายแล้ว <span class="amt">${baht(w)}</span> (${pw(w,i)} ของดอกเบี้ย)</div></div>`;
- h+=matCard()+goalCard();
- const top=A.map(a=>[a,rate(a)]).filter(x=>x[1]!=null).sort((a,b)=>b[1]-a[1]).slice(0,4);
- if(top.length)h+=`<div class="card p-4 mb-3"><div class="text-yellow-300 font-bold text-sm mb-2">ดอกเบี้ยสูงสุด (ประมาณ)</div>${top.map(([a,r])=>`<div class="flex justify-between py-1 text-sm"><span>${esc(a.bank)} · ${esc(a.product)}</span><b class="text-yellow-300">${pct(r)}</b></div>`).join('')}</div>`;
+ `;
+ h+=matCard()+goalCard()+interestCard(y)+bestCard();
  const rc=[...S.txs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
  h+=`<div class="card p-4 mb-3"><div class="flex justify-between mb-2"><span class="text-yellow-300 font-bold text-sm">ธุรกรรมล่าสุด</span><button id="ha" class="text-xs text-yellow-200">ดูทั้งหมด</button></div>${rc.length?rc.map(t=>{const neg=t.type==='wdr'||t.type==='wht'||(t.type==='adj'&&t.amt<0),x=t.type==='xfer';
   return`<div class="flex justify-between items-center py-2 border-t border-zinc-800 text-sm"><div><div>${TY[t.type][1]} ${TY[t.type][0]}</div><div class="text-xs text-zinc-500">${t.date} · ${x?lab(t.acct)+' → '+lab(t.to):lab(t.acct)}</div></div><div class="amt font-semibold ${x?'text-yellow-300':neg?'text-rose-400':'text-emerald-400'}">${x?'':neg?'−':'+'}${baht(Math.abs(t.amt))}</div></div>`}).join(''):'<div class="text-zinc-500 text-sm">ยังไม่มีธุรกรรม</div>'}</div>`;
@@ -363,8 +361,7 @@ function summary(){const A=S.accts,tot=act().reduce((x,a)=>x+bal(a),0),i=sumT('i
  const m=Array(12).fill(0);S.txs.forEach(t=>{if(t.type==='int'&&t.date.slice(0,4)===SY)m[+t.date.slice(5,7)-1]+=t.amt});const mx=Math.max(...m,1);
  const cell=(l,v,c)=>`<div class="card p-3"><div class="text-xs text-zinc-400">${l}</div><div class="amt font-semibold ${c}">${v}</div></div>`;
  let h=`<div class="flex items-center justify-between mt-2 mb-3"><div class="text-yellow-300 font-bold text-lg">สรุปยอดปี</div><select id="sy" style="width:auto">${ys.map(y=>`<option ${y===SY?'selected':''}>${y}</option>`).join('')}</select></div>
- ${interestCard()}${bankIntCard()}
- ${goalCard()}<div class="grid grid-cols-2 gap-3 mb-3">${cell('ฝากเข้า',baht(sumT('dep',SY)),'text-emerald-400')}${cell('ถอนออก',baht(sumT('wdr',SY)),'text-rose-400')}</div>
+ <div class="grid grid-cols-2 gap-3 mb-3">${cell('ฝากเข้า',baht(sumT('dep',SY)),'text-emerald-400')}${cell('ถอนออก',baht(sumT('wdr',SY)),'text-rose-400')}</div>
  <div class="card p-4 mb-3"><div class="text-yellow-300 font-bold text-sm mb-2">ดอกเบี้ยรายเดือน</div><div class="amt neon"><svg viewBox="0 0 312 124" class="w-full"><line x1="0" y1="100" x2="312" y2="100" stroke="#3f3f46"/>${m.map((v,k)=>{const hh=v/mx*90;return`<rect x="${k*26+4}" y="${100-hh}" width="18" height="${v>0?Math.max(hh,2):0}" rx="3" fill="#facc15"><title>${MN[k]} ${baht(v)}</title></rect><text x="${k*26+13}" y="114" font-size="8" text-anchor="middle" fill="#a1a1aa">${MN[k]}</text>`}).join('')}</svg></div></div>
  ${whtCard(i,w)}${accCard()}<div class="text-yellow-300 font-bold text-sm mb-2">แยกตามธนาคาร</div>`;
  if(!A.length)return h+'<div class="card p-6 text-center text-zinc-400">ยังไม่มีบัญชี</div>';
@@ -375,31 +372,45 @@ function summary(){const A=S.accts,tot=act().reduce((x,a)=>x+bal(a),0),i=sumT('i
   <div class="h-2 rounded bg-zinc-800 mt-2 overflow-hidden"><div class="h-full bg-yellow-400" style="width:${Math.max(0,Math.min(100,sh))}%"></div></div><div class="text-xs text-zinc-400 mt-1">${sh.toFixed(1)}% ของยอดรวม · ${LA.length} ผลิตภัณฑ์${L.length>LA.length?' · ปิดแล้ว '+(L.length-LA.length):''}</div>
   <div class="grid grid-cols-3 gap-2 mt-3 text-xs"><div><div class="text-zinc-500">ดอกเบี้ย</div><div class="amt text-emerald-400">${baht(bi)}</div></div><div><div class="text-zinc-500">หัก ณ ที่จ่าย</div><div class="text-rose-400"><span class="amt">${baht(bw)}</span> <span class="text-zinc-400">(${pw(bw,bi)})</span></div></div><div><div class="text-zinc-500">เฉลี่ย (ประมาณ)</div><div class="text-yellow-300">${pct(r)}</div></div></div><div class="text-xs text-zinc-500 mt-3">เงินสะสมเพิ่มรายเดือน · เฉลี่ย <span class="amt ${sa<0?'text-rose-400':'text-emerald-400'}">${baht(sa)}</span>/เดือน</div><div class="amt">${bars(mb,40)}</div></div>`});
  return h}
-/* ---------- การ์ดดอกเบี้ยสะสม / แยกธนาคาร (เลือกปีด้วย #sy) ---------- */
+/* ---------- การ์ดดอกเบี้ยปี (หน้าแรก) / ฝากที่ไหนคุ้มสุด ---------- */
 const PY=y=>String(+y-1);
 const sumTM=(ty,y,me,ids)=>r2(S.txs.filter(t=>t.type===ty&&t.date.slice(0,4)===y&&+t.date.slice(5,7)<=me&&(!ids||ids.has(t.acct))).reduce((x,t)=>x+t.amt,0));
 function yoy(c,p,up='text-emerald-400',dn='text-rose-400'){c=r2(c);p=r2(p);
  if(c===p)return`<div class="text-zinc-400">เท่ากับปีที่แล้ว</div>`;
  const d=r2(c-p),u=d>0,pc=p>0?Math.abs(d)/p*100:100,t=pc>=100?Math.round(pc):(+pc.toFixed(1));
  return`<div class="${u?up:dn}">${u?'▲':'▼'} ${t}% จากปีที่แล้ว<br><span class="amt">(${u?'+':'−'}${baht(Math.abs(d))})</span></div>`}
-function interestCard(){const y=SY,me=y===CY()?ME():12,py=PY(y),r=taxRate(),
+function interestCard(y){const me=y===CY()?new Date().getMonth()+1:12,py=PY(y),r=taxRate(),
  i=sumTM('int',y,me),w=sumTM('wht',y,me),ex=r2(i*r/100),nt=r2(i-ex),
  ip=sumTM('int',py,me),wp=sumTM('wht',py,me),exp=r2(ip*r/100),ntp=r2(ip-exp),
  row=(l,v,sub)=>`<div class="flex justify-between gap-3 py-2"><div class="text-zinc-300" style="flex:1">${l}</div><div class="text-right" style="flex:none;max-width:58%">${v}${sub?`<div class="text-xs mt-1">${sub}</div>`:''}</div></div>`,
  ap=v=>`<span class="text-xs text-zinc-400">ประมาณ</span> <b class="amt">${baht(v)}</b>`;
- return`<div class="card hero p-4 mb-3"><div class="text-zinc-300 font-bold">ดอกเบี้ยสะสม ${y}</div>
- <div class="amt text-3xl font-bold text-emerald-400 neon mt-2">${baht(i)}</div><div class="text-xs mt-2">${yoy(i,ip)}</div>
+ return`<div class="card p-4 mb-3"><div class="text-yellow-300 font-bold text-sm">ดอกเบี้ยปี ${y}</div>
+ <div class="amt text-3xl font-bold text-emerald-400 neon mt-2">${baht(i)}</div><div class="text-xs mt-2">${yoy(i,ip)}</div>${taxBar(i,S.tax.limit)}
  <div class="border-t border-zinc-800 mt-3 pt-2 text-sm">
  ${row('ภาษีที่หักจริง (ตามรายการที่บันทึก)',`<b class="amt">${baht(w)}</b>`,yoy(w,wp,'text-orange-300','text-emerald-400'))}
  ${row('ถึงกำหนดเกณฑ์เสียภาษี '+r+'% (ประมาณ)',ap(ex),yoy(ex,exp,'text-orange-300','text-emerald-400'))}
  ${row('ได้ดอกเบี้ยสุทธิ',ap(nt),yoy(nt,ntp))}
  ${row('เฉลี่ยต่อเดือน ('+(y===CY()?me+' เดือนแรกของปี':'ทั้งปี 12 เดือน')+')',`<b class="amt">${baht(i/me)}</b>`)}
  </div><div class="text-xs text-zinc-500 mt-2">เทียบกับปี ${py} ช่วง ม.ค.–${MN[me-1]} · ภาษีประมาณ = ดอกเบี้ย × ${r}% (ปรับอัตราได้ที่ ตั้งค่า)</div></div>`}
-function bankIntCard(){const y=SY,me=y===CY()?ME():12,by={};
- S.accts.forEach(a=>{(by[a.bank]=by[a.bank]||new Set()).add(a.id)});
- const L=Object.keys(by).map(n=>[n,sumTM('int',y,me,by[n])]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
- return`<div class="card hero p-4 mb-3"><div class="text-zinc-300 font-bold">ดอกเบี้ยรวมแยกธนาคาร ${y}</div>
- ${L.length?L.map(([n,v])=>`<div class="flex justify-between gap-3 py-2 text-sm"><span class="text-zinc-300">${esc(n)}</span><b class="amt text-emerald-400">${baht(v)}</b></div>`).join(''):'<div class="text-zinc-500 text-sm mt-2">ไม่มีดอกเบี้ยในปีนี้</div>'}</div>`}
+function bestCard(){const A=act();if(!A.length)return'';
+ const r=taxRate(),lim=S.tax.limit,by={},n0=v=>'฿'+Math.round(v).toLocaleString('en-US');
+ A.forEach(a=>{const b=by[a.bank]=by[a.bank]||{n:a.bank,bal:0,sv:0,ot:0,hs:false,ho:false,ok:false},rt=rate(a),v=Math.max(0,bal(a));b.bal+=v;
+  if(a.type==='sav')b.hs=true;else b.ho=true;
+  if(rt!=null){b.ok=true;if(a.type==='sav')b.sv+=v*rt/100;else b.ot+=v*rt/100}});
+ const tsv=Object.values(by).reduce((x,b)=>x+b.sv,0),over=lim>0&&tsv>lim;
+ const L=Object.values(by).map(b=>{const g=b.sv+b.ot,tx=((over?b.sv:0)+b.ot)*r/100,nt=g-tx;return{...b,tx,nt,nr:b.ok&&b.bal>0?nt/b.bal*100:null}});
+ const rk=L.filter(x=>x.nr!=null).sort((a,b)=>b.nr-a.nr),no=L.filter(x=>x.nr==null);
+ const tb=rk.reduce((x,b)=>x+b.bal,0),avg=tb>0?rk.reduce((x,b)=>x+b.nt,0)/tb*100:null,M=['🥇','🥈','🥉'];
+ const row=(b,i)=>{const nt=[];
+  if(b.nr!=null&&avg!=null&&rk.length>1)nt.push(b.nr>avg+0.005?'ผลตอบแทนสุทธิสูงกว่าค่าเฉลี่ย':b.nr<avg-0.005?'ผลตอบแทนสุทธิต่ำกว่าค่าเฉลี่ย':'ผลตอบแทนสุทธิเท่าค่าเฉลี่ย');
+  if(b.hs&&over)nt.push('ออมทรัพย์รวมทุกธนาคารคาดว่าเกินเกณฑ์ จึงถูกหัก '+r+'%');else if(b.hs&&lim>0)nt.push('ออมทรัพย์รวมทุกธนาคารยังไม่เกินเกณฑ์ จึงไม่ถูกหัก');
+  if(b.ho)nt.push('ฝากประจำ/อื่น ๆ ถูกหัก '+r+'% เสมอ');
+  return`<div class="rk ${i===0?'rk1':''}"><div class="flex justify-between items-center gap-3"><span class="font-semibold">${M[i]||'#'+(i+1)} ${esc(b.n)}</span><b class="text-yellow-300 ${i===0?'neon':''}">${b.nr==null?'-':pct(b.nr)}</b></div>
+  <div class="amt text-xs text-zinc-300 mt-1">${b.nr==null?'เงินฝาก '+n0(b.bal)+' · ยังไม่มีอัตราให้ประมาณ':'เงินฝาก '+n0(b.bal)+' · ดอกเบี้ยสุทธิ/ปี ≈ '+n0(b.nt)+' · ภาษี ≈ '+n0(b.tx)}</div>
+  ${nt.length?'<div class="text-xs text-zinc-500 mt-1">'+nt.join(' · ')+'</div>':''}</div>`};
+ return`<div class="card p-4 mb-3"><div class="text-yellow-300 font-bold text-sm mb-1">🏆 ฝากที่ไหนคุ้มสุด (ประมาณการ)</div>${[...rk,...no].map(row).join('')}
+ <div class="amt text-xs text-zinc-400 mt-3 border-t border-zinc-800 pt-2">ดอกเบี้ยออมทรัพย์รวมทุกธนาคารปีนี้ (ประมาณทั้งปี) ≈ ${n0(tsv)} / เกณฑ์ ${Math.round(lim).toLocaleString('en-US')} บาท → ${over?'เกินเกณฑ์ ธนาคารหัก '+r+'% แยกรายธนาคาร':'ยังไม่เกินเกณฑ์'}</div>
+ <div class="text-xs text-zinc-500 mt-1">จัดอันดับตามผลตอบแทนสุทธิต่อปี (หลังภาษี) คำนวณจากยอดฝากและอัตราปัจจุบัน/ย้อนคำนวณ ไม่ใช่คำแนะนำการลงทุน</div></div>`}
 function bindSum(){$('#sy').onchange=e=>{SY=e.target.value;render()}}
 
 const ME=()=>SY===CY()?new Date().getMonth()+1:12;
@@ -417,16 +428,11 @@ function avgs(){const ids=act().map(a=>a.id),set=new Set(ids),mo=d=>Math.max(1,d
  d1=mine.filter(t=>t.type==='int'&&set.has(t.acct)).map(t=>t.date).sort()[0],d2=mine.map(t=>t.date).sort()[0],f=flowOf(ids);
  return{mi:d1?(f.int+f.wht)/mo(d1):0,ma:d2?f.net/mo(d2):0,f}}
 function goalCard(){const g=S.goal;
- if(!g.amt)return`<div class="card p-4 mb-3 text-sm flex justify-between items-center"><span>ยังไม่ได้ตั้งเป้าเงินฝาก</span><button id="gs" class="btn2">ตั้งเป้า</button></div>`;
- const tot=act().reduce((x,a)=>x+bal(a),0),left=g.amt-tot,pc=Math.max(0,Math.min(100,tot/g.amt*100)),av=avgs(),mi=g.mi>0?g.mi:av.mi;
- const est=r=>{if(left<=0)return'ถึงเป้าแล้ว 🎉';if(r<0)return'ยอดกำลังลดลง ประมาณไม่ได้';if(!(r>0))return'ยังประมาณไม่ได้';const d=Math.ceil(left/(r/30.4375));
-  return d>36500?'นานเกิน 100 ปี':`<b class="text-yellow-300">${d.toLocaleString('en-US')} วัน</b> <span class="text-zinc-500">(ราว ${ymd(new Date(Date.now()+d*864e5))})</span>`};
- const f=av.f,sg=v=>(v<0?'−':'+')+baht(Math.abs(v)),parts=[['ยอดยกมา',f.open],['ฝาก',f.dep],['ดอกเบี้ย',f.int],['ถอน',f.wdr],['ภาษี',f.wht],['ปรับยอด',f.adj],['โอนออกนอกบัญชีที่เปิดอยู่',f.xf]].filter(x=>x[1]);
- return`<div class="card hero goal p-4 mb-3"><div class="flex justify-between items-center text-sm"><span class="goal-t">เป้าเงินฝากสะสม</span><span class="amt font-semibold goal-v">${baht(g.amt)}</span></div>
+ if(!g.amt)return`<div class="card p-4 mb-3 text-sm flex justify-between items-center"><span>ยังไม่ได้ตั้งเป้าหมายการออม</span><button id="gs" class="btn2">ตั้งเป้า</button></div>`;
+ const tot=act().reduce((x,a)=>x+bal(a),0),left=g.amt-tot,pc=Math.max(0,Math.min(100,tot/g.amt*100));
+ return`<div class="card hero goal p-4 mb-3"><div class="flex justify-between items-center text-sm"><span class="goal-t">🎯 เป้าหมายการออม</span><span class="amt font-semibold goal-v">${baht(g.amt)}</span></div>
  <div class="goal-pc">${pc.toFixed(1)}<small>%</small></div><div class="goal-track"><div class="goal-fill" style="width:${pc}%"></div></div>
- <div class="text-xs text-zinc-400 mt-2">${left>0?'เหลืออีก <span class="amt">'+baht(left)+'</span>':'บรรลุเป้าแล้ว'}</div>
- <div class="text-sm mt-3 space-y-2"><div>ดอกเบี้ยสุทธิ <span class="amt">${baht(mi)}</span>/เดือน${g.mi>0?' (กำหนดเอง)':' (ค่าเฉลี่ยจริง)'}<br>ถึงเป้าใน ${est(mi)}</div>
- <div>เงินสะสมเพิ่มเฉลี่ย <span class="amt ${av.ma<0?'text-rose-400':''}">${baht(av.ma)}</span>/เดือน<br>ถึงเป้าใน ${est(av.ma)}${parts.length?'<div class="amt text-xs text-zinc-500 mt-1">รวมตั้งแต่ต้น (รวมยอดยกมา): '+parts.map(([l,v])=>l+' '+sg(v)).join(' · ')+'</div>':''}${av.ma<0?'<div class="text-xs text-orange-300 mt-1">ติดลบเพราะ ถอน/โอนออก/ภาษี/ปรับลดยอด มากกว่า ฝาก+ดอกเบี้ย</div>':''}</div></div></div>`}
+ <div class="text-xs text-zinc-400 mt-2">${left>0?'เหลืออีก <span class="amt">'+baht(left)+'</span>':'บรรลุเป้าแล้ว 🎉'}</div></div>`}
 
 const taxRate=()=>S.tax.rate??15,pw=(w,i)=>i>0?(w/i*100).toFixed(2)+'%':'-';
 function whtCard(i,w){const r=taxRate(),ex=i*r/100,d=w-ex;
