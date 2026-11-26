@@ -21,7 +21,10 @@
 </div>
 
 <div id="app" class="hidden max-w-md mx-auto min-h-screen pb-28">
- <header class="flex items-center justify-between px-4 py-4 sticky top-0 bg-neutral-950/90 backdrop-blur z-20"><div class="flex items-center gap-3"><img src="icon-192.png" alt="" class="w-11 h-11 rounded-xl"><span class="text-2xl font-bold">Deposit Digital</span></div><div class="flex gap-3"><button id="eye" class="ib" aria-label="ซ่อนหรือแสดงยอดเงิน">👁️</button><button id="lk" class="ib" aria-label="ล็อกแอป">🔓</button></div></header>
+ <header class="hdr sticky top-0 bg-neutral-950/90 backdrop-blur z-20">
+  <div class="hrow1"><div class="hbrand"><img src="icon-192.png" alt="" class="hlogo"><span class="htitle">Deposit Digital</span></div><div class="hbtns"><button id="eye" class="ib" aria-label="ซ่อนหรือแสดงยอดเงิน">👁️</button><button id="lk" class="ib" aria-label="ล็อกแอป">🔓</button></div></div>
+  <div id="hsub" class="hrow2"></div>
+ </header>
  <main id="main" class="px-4"></main>
  <nav class="nvbar fixed bottom-0 inset-x-0 max-w-md mx-auto bg-zinc-950/95 border-t border-yellow-400/30" style="padding-bottom:calc(env(safe-area-inset-bottom) + .4rem)">
   <button data-p="home" class="nv"><span class="ic">🏠</span><span class="lb">หน้าแรก</span></button>
@@ -36,7 +39,7 @@
 <div id="upd" class="hidden fixed inset-x-4 z-[70] max-w-md mx-auto" style="bottom:calc(env(safe-area-inset-bottom) + 6.5rem)"><div class="card hero p-3 flex items-center justify-between gap-3 text-sm"><span>✨ มีเวอร์ชันใหม่พร้อมใช้งาน</span><button id="updb" class="btn !py-1.5">อัปเดต</button></div></div>
 
 <script>
-const VER='1.12.1';
+const VER='1.12.2';
 const $=s=>document.querySelector(s), enc=new TextEncoder(), dec=new TextDecoder();
 const b64=u=>btoa(String.fromCharCode(...new Uint8Array(u))), ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const baht=n=>{const v=Number(n||0);return(v<0?'-':'')+'฿'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
@@ -226,17 +229,19 @@ function mig(){let c=false;if(!S.txs){S.txs=[];c=true}
    if(o>0)S.txs.push({id:uid(),date:a.since,type:'open',acct:a.id,amt:o,note:'ย้ายจากเวอร์ชันก่อน'});
    if(a.interest>0)S.txs.push({id:uid(),date:a.since,type:'int',acct:a.id,amt:a.interest,note:'ย้ายจากเวอร์ชันก่อน'});
    delete a.balance;delete a.interest;c=true}});return c}
-function txForm(){const e=TXD;
+function txForm(){const e=TXD,X=e.type==='xfr',LG=e.type==='xfer';
  if(!S.accts.length)return`<div class="card p-4 mt-3 text-sm">ต้องเพิ่มบัญชีก่อนจึงจะบันทึกธุรกรรมได้<button id="xg" class="btn w-full mt-3">ไปที่บัญชี</button><button id="xc" class="btn2 w-full mt-2">ยกเลิก</button></div>`;
- const opts=v=>S.accts.filter(a=>!a.closed||a.id===v).map(a=>`<option value="${a.id}" ${a.id===v?'selected':''}>${esc(a.bank)} · ${esc(a.product)}</option>`).join('');
- return`<div class="card p-4 mt-3 space-y-3 text-sm"><div class="text-yellow-300 font-bold">${TXF>=0?'แก้ไขธุรกรรม':'เพิ่มธุรกรรม'}</div>
- <div class="grid grid-cols-2 gap-2">${Object.keys(TY).map(k=>`<button data-tp="${k}" class="rounded-lg border px-2 py-2 text-xs ${e.type===k?'bg-yellow-400 text-black font-bold border-yellow-400':'border-yellow-400/30 text-yellow-200'}">${TY[k][1]} ${TY[k][0]}</button>`).join('')}</div>
- <label class="block">${e.type==='xfer'?'จากบัญชี':'บัญชี'}<select id="xa">${opts(e.acct)}</select></label>
- ${e.type==='xfer'?`<label class="block">ไปยังบัญชี<select id="xt">${opts(e.to)}</select></label>`:''}
+ const pick=(att,v)=>`<div class="pk">${S.accts.filter(a=>!a.closed||a.id===v).map(a=>`<button type="button" data-${att}="${a.id}" class="pkb ${a.id===v?'on':''}"><span class="block font-semibold">${esc(a.bank)}</span><span class="block pks">${esc(a.product)}</span></button>`).join('')}</div>`;
+ const types=Object.keys(TY).filter(k=>k!=='xfer'||LG);
+ return`<div class="card p-4 mt-3 space-y-3 text-sm"><div class="text-yellow-300 font-bold">${TXF>=0?'แก้ไขธุรกรรม':X?'โอนระหว่างบัญชี':'เพิ่มธุรกรรม'}</div>
+ <div class="pk">${types.map(k=>`<button type="button" data-tp="${k}" class="pkb pkc ${e.type===k?'on':''}">${TY[k][1]} ${TY[k][0]}</button>`).join('')}${TXF<0?`<button type="button" data-tp="xfr" class="pkb pkc pkw ${X?'on':''}">🔁 โอนระหว่างบัญชี <span class="pks">(ถอน + ฝากอัตโนมัติ)</span></button>`:''}</div>
+ <div><div class="mb-2">${X?'บัญชีต้นทาง':LG?'จากบัญชี':'บัญชี'}</div>${pick('ac',e.acct)}</div>
+ ${X||LG?`<div><div class="mb-2">${X?'บัญชีปลายทาง':'ไปยังบัญชี'}</div>${pick('to',e.to)}</div>`:''}
  <label class="block">จำนวนเงิน (฿)${e.type==='adj'?' ใส่ค่าลบเพื่อลดยอด':''}<input id="xm" type="number" step="0.01" ${e.type==='adj'?'':'min="0"'} value="${e.amt??''}"></label>
  <label class="block">วันที่<input id="xd" type="date" value="${e.date}"></label>
  <label class="block">บันทึกช่วยจำ<input id="xn" value="${esc(e.note||'')}"></label>
- <div class="flex gap-2"><button id="xs" class="btn flex-1">บันทึก</button><button id="xc" class="btn2 flex-1">ยกเลิก</button></div></div>`}
+ ${X?'<div class="text-xs text-zinc-400">ระบบจะบันทึก “ถอน” จากบัญชีต้นทาง และ “ฝาก” เข้าบัญชีปลายทางให้อัตโนมัติ ในครั้งเดียว</div>':''}
+ <div class="flex gap-2"><button id="xs" class="btn flex-1">${X?'โอน':'บันทึก'}</button><button id="xc" class="btn2 flex-1">ยกเลิก</button></div></div>`}
 
 /* ---------- CSV import ---------- */
 const norm=s=>String(s==null?'':s).toLowerCase().replace(/\s+/g,'');
@@ -303,18 +308,18 @@ function txPage(){if(IMP)return impView();if(TXF!==null)return txForm();
  const bk=a=>S.accts.find(x=>x.id===a)?.bank;
  const L=S.txs.map((t,i)=>[t,i]).filter(([t])=>(FT==='all'||t.type===FT)&&(FB==='all'||bk(t.acct)===FB||bk(t.to)===FB)).sort((a,b)=>b[0].date.localeCompare(a[0].date)||b[1]-a[1]);
  const sm=ty=>L.filter(([t])=>t.type===ty).reduce((x,[t])=>x+t.amt,0),i=sm('int'),w=sm('wht');
- let h=`<div class="card hero p-4 mt-2 mb-3"><div class="text-xs text-zinc-400">ดอกเบี้ยเงินฝาก (ตามตัวกรอง)</div><div class="amt text-2xl font-bold text-yellow-300 neon">${baht(i)}</div>
+ let h=`<div class="card hero p-4 mt-2 sp"><div class="text-xs text-zinc-400">ดอกเบี้ยเงินฝาก (ตามตัวกรอง)</div><div class="amt text-2xl font-bold text-yellow-300 neon">${baht(i)}</div>
  <div class="grid grid-cols-2 gap-3 mt-3 text-sm"><div><div class="text-xs text-zinc-400">ภาษีหัก ณ ที่จ่าย</div><div class="text-rose-400 font-semibold"><span class="amt">${baht(w)}</span> <span class="text-xs text-zinc-400">(${pw(w,i)})</span></div></div><div><div class="text-xs text-zinc-400">ดอกเบี้ยสุทธิ</div><div class="amt text-emerald-400 font-semibold">${baht(i-w)}</div></div></div></div>
- <button id="addx" class="btn w-full mb-2">+ เพิ่มธุรกรรม</button>
+ <button id="addx" class="btn w-full sp">+ เพิ่มธุรกรรม</button>
  
- <div class="flex gap-2 overflow-x-auto pb-2">${['all',...Object.keys(TY)].map(k=>`<button data-ft="${k}" class="whitespace-nowrap rounded-full px-3 py-1 text-xs border ${FT===k?'bg-yellow-400 text-black border-yellow-400':'border-yellow-400/30 text-yellow-200'}">${k==='all'?'ทั้งหมด':TY[k][0]}</button>`).join('')}</div>
- <select id="fbk" class="mb-3"><option value="all">ทุกธนาคาร</option>${[...new Set(S.accts.map(a=>a.bank))].map(b=>`<option ${b===FB?'selected':''}>${esc(b)}</option>`).join('')}</select>`;
+ <div class="chips">${['all',...Object.keys(TY).filter(k=>k!=='xfer'||S.txs.some(x=>x.type==='xfer'))].map(k=>`<button data-ft="${k}" class="chip ${FT===k?'on':''}">${k==='all'?'ทั้งหมด':TY[k][0]}</button>`).join('')}</div>
+  <div class="chips sp">${['all',...new Set(S.accts.map(a=>a.bank))].map(b=>`<button data-fb="${esc(b)}" class="chip ${FB===b?'on':''}">${b==='all'?'ทุกธนาคาร':esc(b)}</button>`).join('')}</div>`;
  if(!L.length)return h+'<div class="card p-6 text-center text-zinc-400">ยังไม่มีธุรกรรม</div>';
  return h+L.map(([t,i])=>{const neg=t.type==='wdr'||t.type==='wht'||(t.type==='adj'&&t.amt<0),x=t.type==='xfer';
-  return`<div class="card p-3 mb-2"><div class="flex justify-between gap-2"><div><div class="font-semibold">${TY[t.type][1]} ${TY[t.type][0]}</div><div class="text-xs text-zinc-400">${x?lab(t.acct)+' → '+lab(t.to):lab(t.acct)}</div></div>
+  return`<div class="card txi"><div class="flex justify-between gap-2"><div><div class="font-semibold">${TY[t.type][1]} ${TY[t.type][0]}</div><div class="text-xs text-zinc-400">${x?lab(t.acct)+' → '+lab(t.to):lab(t.acct)}</div></div>
   <div class="amt font-bold whitespace-nowrap ${x?'text-yellow-300':neg?'text-rose-400':'text-emerald-400'}">${x?'':neg?'−':'+'}${baht(Math.abs(t.amt))}</div></div>
   <div class="flex justify-between text-xs text-zinc-500 mt-1"><span>${t.date}${t.note?' · '+esc(t.note):''}</span><span><button data-xe="${i}" class="text-yellow-300">แก้ไข</button><button data-xd="${i}" class="text-rose-400 ml-3">ลบ</button></span></div></div>`}).join('')}
-function capTx(){if($('#xa')){TXD.acct=$('#xa').value;if($('#xt'))TXD.to=$('#xt').value;TXD.amt=$('#xm').value;TXD.date=$('#xd').value;TXD.note=$('#xn').value}}
+function capTx(){if($('#xm')){TXD.amt=$('#xm').value;TXD.date=$('#xd').value;TXD.note=$('#xn').value}}
 function bindTx(){const g=q=>$(q);
  if(g('#imx'))g('#imx').onclick=()=>{IMP=null;render()};
  if(g('#imca'))g('#imca').onchange=e=>{IMP.create=e.target.checked;render()};
@@ -325,15 +330,20 @@ function bindTx(){const g=q=>$(q);
   S.txs.push(...P.tx);IMP=null;await save();render();toast('นำเข้า '+P.tx.length+' รายการแล้ว')};
  if(g('#addx'))g('#addx').onclick=()=>{const L=act();if(!L.length)return toast('ไม่มีบัญชีที่เปิดอยู่');TXD={type:'dep',acct:L[0].id,to:(L[1]||L[0]).id,amt:'',date:today(),note:''};TXF=-1;render()};
  document.querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{FT=b.dataset.ft;render()});
- if(g('#fbk'))g('#fbk').onchange=e=>{FB=e.target.value;render()};
+ document.querySelectorAll('[data-fb]').forEach(b=>b.onclick=()=>{FB=b.dataset.fb;render()});
  document.querySelectorAll('[data-xe]').forEach(b=>b.onclick=()=>{TXF=+b.dataset.xe;TXD={...S.txs[TXF]};render()});
  document.querySelectorAll('[data-xd]').forEach(b=>b.onclick=async()=>{const k=+b.dataset.xd,t=S.txs[k],bad=newNeg(S.txs.filter((_,j)=>j!==k));if(!t||!await confirmToast(bad.length?'การลบจะทำให้ยอดติดลบ: '+badMsg(bad)+' — ลบต่อ?':'ลบธุรกรรมนี้?'))return;if(!S)return;const i=S.txs.indexOf(t);if(i<0)return;S.txs.splice(i,1);await save();render();toast('ลบแล้ว')});
  document.querySelectorAll('[data-tp]').forEach(b=>b.onclick=()=>{capTx();TXD.type=b.dataset.tp;render()});
+ document.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>{capTx();TXD.acct=b.dataset.ac;render()});
+ document.querySelectorAll('[data-to]').forEach(b=>b.onclick=()=>{capTx();TXD.to=b.dataset.to;render()});
  if(g('#xc'))g('#xc').onclick=()=>{TXF=null;render()};
  if(g('#xg'))g('#xg').onclick=()=>{TXF=null;PAGE='acc';render()};
  if(g('#xs'))g('#xs').onclick=async()=>{capTx();const e=TXD,n=Math.round(parseFloat(e.amt)*100)/100;
   if(!n||(e.type!=='adj'&&n<=0)||!e.date)return toast('กรอกจำนวนเงินและวันที่');
-  if(e.type==='xfer'&&e.acct===e.to)return toast('เลือกบัญชีต้นทางและปลายทางให้ต่างกัน');
+  if((e.type==='xfer'||e.type==='xfr')&&e.acct===e.to)return toast('เลือกบัญชีต้นทางและปลายทางให้ต่างกัน');
+   if(e.type==='xfr'){const nt=(e.note||'').trim(),nn=x=>nt?x+' · '+nt:x,pl=id=>{const a=S.accts.find(x=>x.id===id);return a?a.bank+' · '+a.product:''},P=[{id:uid(),date:e.date,type:'wdr',acct:e.acct,amt:n,note:nn('โอนไปยัง '+pl(e.to))},{id:uid(),date:e.date,type:'dep',acct:e.to,amt:n,note:nn('โอนจาก '+pl(e.acct))}],bad=newNeg([...S.txs,...P]);
+    if(bad.length&&!confirm('ยอดบัญชีจะติดลบ: '+badMsg(bad)+'\nดำเนินการต่อ?'))return;
+    S.txs.push(...P);TXF=null;await save();render();return toast('โอนแล้ว (ถอน + ฝาก)')}
   const t={id:e.id||uid(),date:e.date,type:e.type,acct:e.acct,amt:n,note:(e.note||'').trim()};if(e.type==='xfer')t.to=e.to;
   const L=TXF>=0?S.txs.map((x,k)=>k===TXF?t:x):[...S.txs,t],bad=newNeg(L);if(bad.length&&!confirm('ยอดบัญชีจะติดลบ: '+badMsg(bad)+'\nดำเนินการต่อ?'))return;
   if(TXF>=0)S.txs[TXF]=t;else S.txs.push(t);TXF=null;await save();render();toast('บันทึกแล้ว')}}
@@ -347,7 +357,7 @@ function openTx(ty){const L=act();if(!L.length)return toast('ไม่มีบ�
 function home(){const A=act(),y=CY();
  let h=totCard();
  if(!A.length)return h+`<div class="card p-6 text-center"><div class="text-zinc-300">เริ่มต้นด้วยการเพิ่มบัญชีแรกของคุณ</div><button id="hg" class="btn w-full mt-4">ไปที่บัญชี</button></div>`;
- h+=negBanner()+`<div class="grid grid-cols-4 gap-2 mb-3">${[['dep','⬇️','ฝาก'],['wdr','⬆️','ถอน'],['int','✨','ดอกเบี้ย'],['xfer','🔁','โอน']].map(([k,e,t])=>`<button data-q="${k}" class="card py-3 text-center"><div class="text-2xl">${e}</div><div class="text-xs mt-1 text-yellow-200">${t}</div></button>`).join('')}</div>
+ h+=negBanner()+`<div class="qa">${[['dep','⬇️','ฝาก'],['wdr','⬆️','ถอน'],['int','✨','ดอกเบี้ย'],['xfr','🔁','โอน']].map(([k,e,t])=>`<button data-q="${k}" class="card"><div class="qe">${e}</div><div class="qt">${t}</div></button>`).join('')}</div>
  `;
  h+=matCard()+goalCard()+interestCard(y)+bestCard();
  const rc=[...S.txs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
@@ -456,14 +466,14 @@ function icsDl(a){const n=new Date(a.mat);n.setDate(n.getDate()+1);const c=x=>x.
  const t=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//DepositDigital//TH\r\nBEGIN:VEVENT\r\nUID:${a.id}@deposit-digital\r\nDTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').slice(0,15)}Z\r\nDTSTART;VALUE=DATE:${c(a.mat)}\r\nDTEND;VALUE=DATE:${c(ymd(n))}\r\nSUMMARY:ครบกำหนดฝาก ${a.bank} ${a.product}\r\nBEGIN:VALARM\r\nTRIGGER:-P7D\r\nACTION:DISPLAY\r\nDESCRIPTION:ใกล้ครบกำหนดฝาก\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR`;
  const l=document.createElement('a');l.href=URL.createObjectURL(new Blob([t],{type:'text/calendar'}));l.download='maturity.ics';l.click();toast('ไฟล์ปฏิทินมีชื่อธนาคารและผลิตภัณฑ์ของคุณ')}
 const PT={home:'หน้าแรก',acc:'บัญชี',tx:'ธุรกรรม',sum:'สรุปยอด',set:'ตั้งค่า'};
-const rfRow=()=>`<div class="rfrow"><span class="rft">${PT[PAGE]||''}</span><button id="rfb" class="rfbtn" aria-label="รีเฟรชหน้านี้" title="รีเฟรช">🔄</button></div>`;
+const hSub=()=>`<span class="rft">${PT[PAGE]||''}</span><button id="rfb" class="rfbtn" aria-label="รีเฟรชหน้านี้" title="รีเฟรช">🔄</button>`;
 function refreshPage(){if(!S)return;if(FORM!==null||TXF!==null||IMP)return toast('กำลังกรอกฟอร์มอยู่ บันทึกหรือยกเลิกก่อนรีเฟรช');
  const b=$('#rfb');b&&b.classList.add('spin');SW_REG&&SW_REG.update().catch(()=>{});setTimeout(()=>{if(!S)return;render();toast('รีเฟรชแล้ว')},350)}
 function render(){if(mig())save();
  $('#app').classList.toggle('hide',S.hide);$('#eye').classList.toggle('act',S.hide);
  document.querySelectorAll('.nv').forEach(b=>b.classList.toggle('text-yellow-300',b.dataset.p===PAGE));
  const T={home:'หน้าแรก',sum:'สรุปยอด'};
- $('#main').innerHTML=rfRow()+(PAGE==='set'?settings():PAGE==='acc'?accounts():PAGE==='tx'?txPage():PAGE==='home'?home():PAGE==='sum'?summary():soon(T[PAGE]));if(PAGE==='set')bind();if(PAGE==='acc')bindAcc();if(PAGE==='tx')bindTx();if(PAGE==='home')bindHome();if(PAGE==='sum')bindSum();bindCards()}
+ $('#hsub').innerHTML=hSub();$('#main').innerHTML=(PAGE==='set'?settings():PAGE==='acc'?accounts():PAGE==='tx'?txPage():PAGE==='home'?home():PAGE==='sum'?summary():soon(T[PAGE]));if(PAGE==='set')bind();if(PAGE==='acc')bindAcc();if(PAGE==='tx')bindTx();if(PAGE==='home')bindHome();if(PAGE==='sum')bindSum();bindCards()}
 function bind(){
  $('#imt').onclick=csvTemplate;
  $('#imf').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)await csvLoad(f)};

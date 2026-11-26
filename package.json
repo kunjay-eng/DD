@@ -1,6 +1,6 @@
 {
   "name": "deposit-digital",
-  "version": "1.12.1",
+  "version": "1.12.2",
   "private": true,
   "scripts": {
     "build:css": "tailwindcss -i ./src/input.css -o ./tw.css --minify"
